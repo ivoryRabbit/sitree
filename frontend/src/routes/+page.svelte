@@ -1,16 +1,33 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import cytoscape from 'cytoscape';
+	import type { Core } from 'cytoscape';
 	import { toElements, stylesheet, defaultLayout } from '$lib/graph/cytoscape';
 	import type { SiteGraph, Node } from '$lib/types';
 	import example from '$lib/example.json';
 
 	let container: HTMLDivElement;
 	let selected: Node | null = $state(null);
-	const graph: SiteGraph = example as unknown as SiteGraph;
+	// Default to the bundled example so the page also works standalone (`npm run dev`).
+	// When served by `sitree view`, the real graph is fetched from the backend below.
+	let graph: SiteGraph = $state(example as unknown as SiteGraph);
 
-	onMount(() => {
-		const cy = cytoscape({
+	async function loadGraph(): Promise<SiteGraph> {
+		try {
+			const res = await fetch('/api/graph');
+			if (res.ok) return (await res.json()) as SiteGraph;
+		} catch {
+			// No backend (standalone dev) — keep the bundled example.
+		}
+		return graph;
+	}
+
+	let cy: Core | undefined;
+
+	onMount(async () => {
+		graph = await loadGraph();
+
+		cy = cytoscape({
 			container,
 			elements: toElements(graph),
 			style: stylesheet,
@@ -25,9 +42,9 @@
 		cy.on('tap', (evt) => {
 			if (evt.target === cy) selected = null;
 		});
-
-		return () => cy.destroy();
 	});
+
+	onDestroy(() => cy?.destroy());
 </script>
 
 <header>

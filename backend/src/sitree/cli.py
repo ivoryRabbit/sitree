@@ -58,10 +58,26 @@ def crawl(
 def view(
     path: Path = typer.Argument(..., exists=True, help="SiteGraph JSON to view."),
     port: int = typer.Option(8765, help="Local port to serve the dashboard on."),
+    host: str = typer.Option("127.0.0.1", help="Host/interface to bind."),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Open a browser tab."),
 ) -> None:
     """Serve the static dashboard with the given JSON loaded."""
-    _ = path, port
-    _not_implemented("view", "Phase 1.2")
+    from sitree import server
+    from sitree.schema import from_json
+
+    build = server.find_frontend_build()
+    if build is None:
+        typer.secho(
+            "[view] frontend build not found — run: cd frontend && npm run build",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    graph = from_json(path.read_text(encoding="utf-8"))
+    url = f"http://{host}:{port}/"
+    typer.echo(f"[view] serving {path} ({len(graph.nodes)} nodes) at {url}")
+    server.serve(server.create_app(graph), host=host, port=port, open_url=url if open_browser else None)
 
 
 @app.command()

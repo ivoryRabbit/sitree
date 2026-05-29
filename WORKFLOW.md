@@ -58,8 +58,9 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [x] `frontend/src/routes/+page.svelte`: JSON 정적 로드(`$lib/example.json`) + breadthfirst 트리 + 노드 클릭 시 메타 패널 — 2026-05-25. *Svelte 5 runes 모드라 `$state` 필수*
 - [x] `frontend/src/lib/example.json`: 데모 데이터 (6 nodes / 6 edges, 모든 PageType 포함) — 2026-05-25
 - [x] 빌드 검증: `npm run build` → 정적 산출물 OK, `svelte-check` 0 errors — 2026-05-25
-- [ ] CLI `sitree view <json>` — FastAPI가 프런트 정적 빌드 서빙
-- [ ] `@sveltejs/adapter-static` 전환 (현재 `adapter-auto`라 `sitree view` 정적 서빙 시 어댑터 결정 경고 발생)
+- [x] CLI `sitree view <json>` — FastAPI가 프런트 정적 빌드 서빙 — 2026-05-29. *`server.create_app(graph)`: `/api/graph`(JSON) + `StaticFiles(html=True)` 마운트(API 라우트를 먼저 등록해 `/api/*` 우선). `serve()`가 uvicorn 실행 + `threading.Timer`로 브라우저 오픈. 스모크: 6노드 example.json → `/api/graph`·`/`·`_app/*.js` 모두 200*
+- [x] `@sveltejs/adapter-static` 전환 — 2026-05-29. *SPA 모드(`+layout.ts`에 `ssr=false`, adapter `fallback: 'index.html'`). `+page.svelte`가 onMount에서 `/api/graph` fetch, 실패 시 번들 example.json 폴백 → 단일 빌드가 `npm run dev` 독립 실행과 `sitree view` 서빙 양쪽에서 동작. async onMount는 cleanup 반환이 무시되므로 `onDestroy`로 `cy.destroy()` 분리*
+- [x] `sitree view` 스모크용 샘플로 `examples/example.json` 사용 — 2026-05-29. *단, `examples/*.json`은 .gitignore 정책(생성 산출물)이라 커밋 안 함. 데모 픽스처의 정본은 `frontend/src/lib/example.json`*
 
 ### 1.3 테스트
 - [x] `tests/conftest.py` 공유 fixture — 2026-05-25
@@ -134,6 +135,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-29 — **프런트는 SPA(adapter-static fallback) + 런타임 `/api/graph` fetch.** 빌드 1개로 정적 데모(example 번들)와 `sitree view` 서빙을 모두 커버. 데이터를 빌드에 임베드하지 않아 임의 JSON을 띄울 수 있음
 - 2026-05-29 — **미구현 CLI 명령은 exit 1 + stderr 경고.** echo 후 exit 0이면 스크립트/자동화가 no-op을 성공으로 오인. Phase 게이트는 종료 코드로 명시
 - 2026-05-29 — **LiveOp를 schema.py의 단일 소스로 승격.** 라이브 op이 types.ts에만 있어 Phase 5에서 드리프트 위험. 지금 dataclass로 고정
 - 2026-05-25 — **`crawl()`·`run_crawl()`이 `httpx.AsyncClient`를 주입받도록.** `unittest.mock.patch`로 `httpx.AsyncClient`를 패치하면 AsyncMock이 컨텍스트 매니저 안쪽까지 들어가 깨짐. 의존성 주입이 테스트에서도 본 코드에서도 더 명확
@@ -156,7 +158,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - **URL 템플릿 자동 추론 전환 시점**: 현재 화이트리스트 + 카디널리티. 본문 차이 기반 추론은 비용 — 언제 도입할지
 - **프런트 그래프 한계**: cytoscape 5만+ 노드 도달 시 sigma.js 전환 기준
 - **`uv run sitree` vs venv activate**: 권장 워크플로 확정 필요 (CLAUDE.md "자주 쓰는 명령어" 갱신)
-- **SvelteKit adapter**: `adapter-auto` → `adapter-static` 전환 필요 (`sitree view`로 정적 서빙하려면)
+- **프런트 빌드 → 백엔드 wheel 번들링**: 현재 `find_frontend_build()`가 dev 트리(`../frontend/build`)를 찾음. 배포 시 빌드를 `sitree/static/`으로 복사하는 hatchling 빌드 훅 필요 (server.py는 이미 그 경로를 1순위로 탐색)
 
 ## 다음 단계 후보
 

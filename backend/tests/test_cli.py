@@ -71,10 +71,33 @@ def test_view_requires_existing_file(tmp_path) -> None:
     assert result.exit_code != 0
 
 
-def test_view_existing_file_not_implemented(tmp_path) -> None:
-    # File exists (passes typer's exists=True), but the command itself is unimplemented.
+def test_view_serves_graph(tmp_path, monkeypatch) -> None:
+    import sitree.server as server_module
+
+    served: dict[str, object] = {}
+
+    def fake_serve(app_obj, *, host, port, open_url=None) -> None:
+        served.update(host=host, port=port, open_url=open_url, app=app_obj)
+
+    # Pretend a frontend build exists, and don't actually start uvicorn.
+    monkeypatch.setattr(server_module, "find_frontend_build", lambda: tmp_path)
+    monkeypatch.setattr(server_module, "serve", fake_serve)
+
+    p = tmp_path / "graph.json"
+    p.write_text('{"root": "https://x.com", "nodes": [], "edges": []}')
+    result = runner.invoke(app, ["view", str(p), "--port", "9999", "--no-open"])
+
+    assert result.exit_code == 0, result.output
+    assert served["port"] == 9999
+    assert served["open_url"] is None  # --no-open
+
+
+def test_view_errors_without_frontend_build(tmp_path, monkeypatch) -> None:
+    import sitree.server as server_module
+
+    monkeypatch.setattr(server_module, "find_frontend_build", lambda: None)
     p = tmp_path / "graph.json"
     p.write_text('{"root": "x"}')
     result = runner.invoke(app, ["view", str(p)])
     assert result.exit_code == 1
-    assert "not yet implemented" in result.output
+    assert "frontend build not found" in result.output
