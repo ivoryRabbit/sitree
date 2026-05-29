@@ -11,9 +11,10 @@ from dataclasses import dataclass
 from urllib.parse import urljoin, urlsplit
 
 import httpx
-from selectolax.parser import HTMLParser
+from selectolax.parser import HTMLParser, Node
 
 from sitree.core.url_normalize import normalize
+from sitree.schema import EdgePosition
 
 
 @dataclass
@@ -29,18 +30,69 @@ class CrawlConfig:
 
 
 @dataclass
+class Link:
+    """A discovered outbound link, with the metadata sitree records on edges."""
+
+    url: str
+    anchor_text: str = ""
+    position: EdgePosition = "other"
+
+
+@dataclass
+class _Pending:
+    """A frontier entry: a URL plus the link metadata that led to it."""
+
+    url: str
+    depth: int
+    referrer: str | None
+    anchor_text: str = ""
+    position: EdgePosition = "other"
+
+
+@dataclass
 class FetchResult:
     url: str
     status: int
     html: str
-    discovered_links: list[str]
+    discovered_links: list[Link]
     depth: int = 0
+    # The link that led here (for edge building); set during the crawl.
     referrer: str | None = None
+    anchor_text: str = ""
+    position: EdgePosition = "other"
 
 
-def extract_links(html: str, base_url: str) -> list[str]:
+# Layout containers → canonical edge position. header is grouped with nav,
+# article with main; anything else falls through to "other".
+_POSITION_BY_TAG: dict[str, EdgePosition] = {
+    "nav": "nav",
+    "header": "nav",
+    "footer": "footer",
+    "main": "main",
+    "article": "main",
+}
+
+_MAX_ANCHOR = 120
+
+
+def _link_position(node: Node) -> EdgePosition:
+    """Classify a link by its nearest layout-container ancestor."""
+    cur = node.parent
+    while cur is not None:
+        position = _POSITION_BY_TAG.get(cur.tag)
+        if position is not None:
+            return position
+        cur = cur.parent
+    return "other"
+
+
+def extract_links(html: str, base_url: str) -> list[Link]:
+    """Extract outbound links with anchor text and DOM position.
+
+    Deduped by normalized URL (first occurrence wins, keeping its anchor/position).
+    """
     tree = HTMLParser(html)
-    out: list[str] = []
+    out: list[Link] = []
     seen: set[str] = set()
     for node in tree.css("a[href]"):
         href = node.attributes.get("href")
@@ -53,9 +105,11 @@ def extract_links(html: str, base_url: str) -> list[str]:
             normalized = normalize(absolute)
         except Exception:
             continue
-        if normalized not in seen:
-            seen.add(normalized)
-            out.append(normalized)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        anchor = (node.text(strip=True) or "")[:_MAX_ANCHOR]
+        out.append(Link(url=normalized, anchor_text=anchor, position=_link_position(node)))
     return out
 
 
@@ -81,14 +135,15 @@ async def crawl(
     seed: str,
     config: CrawlConfig | None = None,
     *,
-    initial_urls: list[str] | None = None,
+    initial_urls: list[Link] | None = None,
     allowed: "callable[[str], bool] | None" = None,
     client: httpx.AsyncClient | None = None,
 ) -> list[FetchResult]:
     """BFS crawl from `seed`.
 
     Args:
-        initial_urls: extra URLs to seed the frontier (e.g., from sitemap discovery).
+        initial_urls: extra Links to seed the frontier (e.g., from sitemap/seed-page
+            discovery). Seed-page Links carry anchor/position; sitemap ones don't.
         allowed: predicate to filter URLs (e.g., robots.txt). Defaults to allow-all.
         client: optional pre-configured AsyncClient (useful for tests with MockTransport).
             When omitted, a default client is created from `config`.
@@ -97,10 +152,16 @@ async def crawl(
     seed_norm = normalize(seed)
     allow_fn = allowed or (lambda _: True)
 
-    frontier: deque[tuple[str, int, str | None]] = deque()
+    frontier: deque[_Pending] = deque()
     seen: set[str] = set()
 
-    def enqueue(url: str, depth: int, referrer: str | None) -> None:
+    def enqueue(
+        url: str,
+        depth: int,
+        referrer: str | None,
+        anchor_text: str = "",
+        position: EdgePosition = "other",
+    ) -> None:
         if url in seen:
             return
         if config.same_origin_only and not _same_origin(url, seed_norm):
@@ -108,36 +169,36 @@ async def crawl(
         if not allow_fn(url):
             return
         seen.add(url)
-        frontier.append((url, depth, referrer))
+        frontier.append(_Pending(url, depth, referrer, anchor_text, position))
 
     enqueue(seed_norm, 0, None)
-    for u in initial_urls or []:
-        enqueue(normalize(u), 1, seed_norm)
+    for link in initial_urls or []:
+        enqueue(normalize(link.url), 1, seed_norm, link.anchor_text, link.position)
 
     results: list[FetchResult] = []
     semaphore = asyncio.Semaphore(config.concurrency)
 
-    async def worker(url: str, depth: int, referrer: str | None, c: httpx.AsyncClient) -> FetchResult | None:
+    async def worker(item: _Pending, c: httpx.AsyncClient) -> FetchResult | None:
         async with semaphore:
             if config.delay > 0:
                 await asyncio.sleep(config.delay)
             try:
-                result = await fetch(url, c)
+                result = await fetch(item.url, c)
             except httpx.HTTPError:
                 return None
-        result.depth = depth
-        result.referrer = referrer
+        result.depth = item.depth
+        result.referrer = item.referrer
+        result.anchor_text = item.anchor_text
+        result.position = item.position
         return result
 
     async def _run(c: httpx.AsyncClient) -> None:
         while frontier and len(results) < config.max_pages:
-            batch: list[tuple[str, int, str | None]] = []
+            batch: list[_Pending] = []
             while frontier and len(batch) < config.concurrency and len(results) + len(batch) < config.max_pages:
                 batch.append(frontier.popleft())
 
-            batch_results = await asyncio.gather(
-                *(worker(u, d, r, c) for u, d, r in batch)
-            )
+            batch_results = await asyncio.gather(*(worker(item, c) for item in batch))
 
             for result in batch_results:
                 if result is None:
@@ -146,7 +207,7 @@ async def crawl(
                 if result.depth >= config.max_depth:
                     continue
                 for link in result.discovered_links:
-                    enqueue(link, result.depth + 1, result.url)
+                    enqueue(link.url, result.depth + 1, result.url, link.anchor_text, link.position)
 
     if client is not None:
         await _run(client)

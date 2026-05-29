@@ -81,7 +81,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [x] `pipeline.run_crawl`: robots crawl-delay 반영 시 `dataclasses.replace`로 복사 후 수정 — 2026-05-29. *전달받은 `config.delay`를 그 자리에서 변형해 호출자 객체에 부작용 있던 것 제거*
 - [x] `.gitignore`에 `.coverage`/`.pytest_cache/` 추가, `pyproject` description 기본값 교체 — 2026-05-29
 - [x] **54 passed / ruff clean** — 2026-05-29
-- [ ] `extract_links`가 anchor text·DOM 위치(nav/main/footer) 미수집 → Edge 메타가 빈 껍데기 (PLAN의 "앵커 텍스트·위치 메타" 미충족). frontier에 anchor/position 실어 나르는 리팩토 필요 — **P2, 별도 패스**
+- [x] `extract_links`가 anchor text·DOM 위치(nav/main/footer) 수집 → Edge 메타 채움 — 2026-05-30. *`extract_links` 반환을 `list[Link]`(url+anchor_text+position)로. `_link_position`이 가장 가까운 레이아웃 조상(nav/header→nav, footer→footer, main/article→main, else other) 판정. frontier `_Pending`이 메타를 날라 `FetchResult`에 incoming-link 메타 부착 → `_build_graph`가 엣지 `anchor_texts`/`position` 채움. **디스커버리도 시드 페이지 링크를 anchorless로 먼저 큐잉해 시드→자식(nav) 엣지가 비던 문제**를 발견 → `DiscoveryResult.initial_urls`를 `list[Link]`로 바꾸고, sitemap·seed 중복 시 앵커 있는 seed 링크로 업그레이드. 스모크: docs.python.org 46/46 엣지에 앵커, nav 21·other 25*
 - [ ] 프런트엔드 테스트 부재 (`npm test`가 CLAUDE.md에 있으나 vitest 미설정) — **P2**
 
 ### 1.5 실사이트 스모크 (2026-05-30)
@@ -144,6 +144,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **디스커버리 `initial_urls`를 `list[str]`→`list[Link]`로.** 시드 페이지 링크의 anchor/position을 frontier까지 보존해야 시드→자식 엣지(주로 nav) 메타가 채워짐. sitemap(앵커 없음)과 seed 링크 중복 시 앵커 있는 쪽으로 업그레이드
 - 2026-05-30 — **분류 LLM은 `Labeler` 콜러블로 추상화 + 지연 생성.** 휴리스틱으로 못 가르는 그룹만 호출, 그룹당 1회(CLAUDE 규칙). 주입 가능해 테스트는 네트워크 0건, `crawl --classify` OFF면 anthropic 클라이언트/키 불필요
 - 2026-05-30 — **노드 머지 시 depth는 `min` 유지.** depth = 시드로부터 최단거리 의미. 시드 리다이렉트 타깃이 더 깊은 페이지에서도 링크될 때 덮어쓰기로 루트 깊이가 망가지던 것 수정
 - 2026-05-29 — **프런트는 SPA(adapter-static fallback) + 런타임 `/api/graph` fetch.** 빌드 1개로 정적 데모(example 번들)와 `sitree view` 서빙을 모두 커버. 데이터를 빌드에 임베드하지 않아 임의 JSON을 띄울 수 있음

@@ -15,7 +15,7 @@ from xml.etree import ElementTree as ET
 
 import httpx
 
-from sitree.core.crawler import extract_links
+from sitree.core.crawler import Link, extract_links
 from sitree.core.url_normalize import normalize
 
 USER_AGENT = "sitree"
@@ -41,17 +41,23 @@ class RobotsInfo:
 class DiscoveryResult:
     robots: RobotsInfo
     sitemap_urls: list[str]
-    seed_links: list[str]
+    seed_links: list[Link]  # links found on the seed page, with anchor/position
 
     @property
-    def initial_urls(self) -> list[str]:
-        seen: set[str] = set()
-        out: list[str] = []
-        for url in [*self.sitemap_urls, *self.seed_links]:
-            if url not in seen:
-                seen.add(url)
-                out.append(url)
-        return out
+    def initial_urls(self) -> list[Link]:
+        """Frontier seeds as Links. Sitemap URLs carry no anchor; seed-page links
+        keep theirs so seed→child edges (nav/footer/…) get proper metadata. When a
+        URL appears in both, the seed-page anchor/position upgrades the bare entry."""
+        index: dict[str, Link] = {}
+        order: list[str] = []
+        for link in [*(Link(url=u) for u in self.sitemap_urls), *self.seed_links]:
+            existing = index.get(link.url)
+            if existing is None:
+                index[link.url] = link
+                order.append(link.url)
+            elif not existing.anchor_text and link.anchor_text:
+                index[link.url] = link
+        return [index[u] for u in order]
 
 
 def _origin(url: str) -> str:
@@ -137,7 +143,7 @@ async def discover(seed_url: str, client: httpx.AsyncClient) -> DiscoveryResult:
         sitemap_urls.extend(await fetch_sitemap(sm, client))
     sitemap_urls = [normalize(u) for u in sitemap_urls]
 
-    seed_links: list[str] = []
+    seed_links: list[Link] = []
     try:
         seed_response = await client.get(seed, follow_redirects=True)
         if seed_response.status_code < 400 and "html" in seed_response.headers.get("content-type", "").lower():
@@ -145,7 +151,7 @@ async def discover(seed_url: str, client: httpx.AsyncClient) -> DiscoveryResult:
     except httpx.HTTPError:
         pass
 
-    if seed not in sitemap_urls and seed not in seed_links:
-        seed_links.insert(0, seed)
+    if seed not in sitemap_urls and not any(link.url == seed for link in seed_links):
+        seed_links.insert(0, Link(url=seed))
 
     return DiscoveryResult(robots=robots, sitemap_urls=sitemap_urls, seed_links=seed_links)

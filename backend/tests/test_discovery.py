@@ -125,8 +125,12 @@ async def test_discover_combines_robots_sitemap_seed(robots_text: str, sitemap_x
         result = await discover("https://example.com/", client)
 
     assert result.robots.crawl_delay == 1.5
-    assert "https://example.com/about" in result.initial_urls
-    assert "https://example.com/contact" in result.initial_urls
-    assert "https://example.com/products/1" in result.initial_urls
+    urls = [link.url for link in result.initial_urls]
+    assert "https://example.com/about" in urls
+    assert "https://example.com/contact" in urls
+    assert "https://example.com/products/1" in urls
     # initial_urls should be deduped
-    assert len(result.initial_urls) == len(set(result.initial_urls))
+    assert len(urls) == len(set(urls))
+    # seed-page links keep their anchor text
+    about = next(link for link in result.initial_urls if link.url == "https://example.com/about")
+    assert about.anchor_text == "A"

@@ -9,23 +9,46 @@ from sitree.core.crawler import CrawlConfig, crawl, extract_links, fetch
 
 
 def test_extract_links_filters_non_http_and_normalizes(sample_html: str) -> None:
-    links = extract_links(sample_html, base_url="https://example.com/")
+    urls = [link.url for link in extract_links(sample_html, base_url="https://example.com/")]
     # mailto/anchor/javascript are filtered; remaining absolute + normalized
-    assert "https://example.com/about" in links
-    assert "https://example.com/products/42" in links
-    assert "https://other.example.com/x" in links
+    assert "https://example.com/about" in urls
+    assert "https://example.com/products/42" in urls
+    assert "https://other.example.com/x" in urls
     # tracking-only query becomes empty query under normalize
-    assert "https://example.com/" in links
+    assert "https://example.com/" in urls
     # mailto and # filtered out
-    assert not any(link.startswith("mailto:") for link in links)
-    assert not any("#" in link for link in links)
+    assert not any(u.startswith("mailto:") for u in urls)
+    assert not any("#" in u for u in urls)
 
 
 def test_extract_links_dedupes() -> None:
     html = '<a href="/x">1</a><a href="/x">2</a><a href="/x?utm_source=a">3</a>'
     links = extract_links(html, "https://example.com/")
     # All three resolve to the same normalized URL
-    assert links == ["https://example.com/x"]
+    assert [link.url for link in links] == ["https://example.com/x"]
+
+
+def test_extract_links_captures_anchor_and_position() -> None:
+    html = """
+    <html><body>
+      <nav><a href="/home">Home</a></nav>
+      <header><a href="/login">Sign in</a></header>
+      <main><a href="/product/1">  Cool Widget  </a></main>
+      <article><a href="/post/1">Read more</a></article>
+      <footer><a href="/about">About</a></footer>
+      <a href="/loose">Loose</a>
+    </body></html>
+    """
+    by_url = {link.url: link for link in extract_links(html, "https://x.com/")}
+
+    assert by_url["https://x.com/home"].position == "nav"
+    assert by_url["https://x.com/login"].position == "nav"  # header grouped with nav
+    assert by_url["https://x.com/product/1"].position == "main"
+    assert by_url["https://x.com/post/1"].position == "main"  # article grouped with main
+    assert by_url["https://x.com/about"].position == "footer"
+    assert by_url["https://x.com/loose"].position == "other"
+    # anchor text is trimmed
+    assert by_url["https://x.com/product/1"].anchor_text == "Cool Widget"
 
 
 async def test_fetch_uses_mock_transport() -> None:
@@ -44,7 +67,10 @@ async def test_fetch_uses_mock_transport() -> None:
 
     assert result.status == 200
     assert result.url == "https://example.com/"
-    assert set(result.discovered_links) == {"https://example.com/about", "https://example.com/p/1"}
+    assert {link.url for link in result.discovered_links} == {
+        "https://example.com/about",
+        "https://example.com/p/1",
+    }
 
 
 async def test_fetch_handles_non_html_response() -> None:

@@ -105,7 +105,8 @@ def _build_graph(
             continue
         src_tpl = templates.get(r.referrer, r.referrer)
         if src_tpl != tpl:
-            builder.add_edge(src_tpl, tpl)
+            anchors = [r.anchor_text] if r.anchor_text else []
+            builder.add_edge(src_tpl, tpl, anchor_texts=anchors, position=r.position)
 
     meta = CrawlMeta(
         ran_at=datetime.now(),

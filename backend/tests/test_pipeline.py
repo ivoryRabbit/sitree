@@ -69,6 +69,27 @@ async def test_run_crawl_applies_labels_when_classify_enabled() -> None:
     assert seen[0].title == "About us"
 
 
+async def test_run_crawl_populates_edge_anchor_and_position() -> None:
+    site = {
+        "/": '<html><body><nav><a href="/about">About us</a></nav></body></html>',
+        "/about": "<html><body>about</body></html>",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = site.get(request.url.path)
+        return httpx.Response(404) if body is None else httpx.Response(
+            200, text=body, headers={"content-type": "text/html"}
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://example.com") as client:
+        graph = await run_crawl("https://example.com/", CrawlConfig(delay=0), client=client)
+
+    edge = next(e for e in graph.edges if e.target == "/about")
+    assert edge.anchor_texts == ["About us"]
+    assert edge.position == "nav"
+
+
 async def test_run_crawl_no_classify_leaves_labels_none() -> None:
     site = {"/": "<html><head><title>Home</title></head><body>hi</body></html>"}
 
