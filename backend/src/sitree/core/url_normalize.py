@@ -24,10 +24,17 @@ IDENTITY_KEYS: frozenset[str] = frozenset({"id", "slug", "page", "category", "q"
 _NUMERIC = re.compile(r"^\d+$")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 _SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){1,}$")
+# Dotted version segments: 3.10, 2.7.18, v1.2 (docs/version-rooted trees).
+_VERSION = re.compile(r"^v?\d+(?:\.\d+)+$", re.I)
 
 
 def _looks_like_id(segment: str) -> bool:
-    return bool(_NUMERIC.match(segment) or _UUID.match(segment) or _SLUG.match(segment))
+    return bool(
+        _NUMERIC.match(segment)
+        or _UUID.match(segment)
+        or _SLUG.match(segment)
+        or _VERSION.match(segment)
+    )
 
 
 def normalize(url: str, base: str | None = None) -> str:
@@ -84,8 +91,8 @@ def templatize(urls: list[str], options: TemplateOptions | None = None) -> dict[
     """Map each normalized URL → template string.
 
     Strategy:
-      1. Split path into segments. Segments that look like IDs (numeric/UUID/slug)
-         become `{id}` in the template.
+      1. Split path into segments. Segments that look like IDs (numeric/UUID/slug/
+         dotted-version) become `{id}` in the template.
       2. To avoid over-eagerly templating low-cardinality segments, only collapse
          segments at positions where ≥ min_group_size distinct values appear
          under the same parent prefix.

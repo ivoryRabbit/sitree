@@ -80,6 +80,27 @@ class TestTemplatize:
         result = templatize(urls)
         assert all(v == "/blog/{id}" for v in result.values())
 
+    def test_version_segments_collapse(self) -> None:
+        # Dotted version dirs (docs.python.org/3.10, /3.11, …) should group.
+        versions = ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
+        urls = [f"https://docs.example.com/{v}/library/index.html" for v in versions]
+        result = templatize(urls)
+        assert all(v == "/{id}/library/index.html" for v in result.values())
+
+    def test_version_with_v_prefix_and_patch(self) -> None:
+        urls = [f"https://example.com/docs/{v}" for v in ["v1.0", "v1.1", "v2.0", "v2.1.3", "v3.0"]]
+        result = templatize(urls)
+        assert all(v == "/docs/{id}" for v in result.values())
+
+    def test_dotted_filename_not_treated_as_version(self) -> None:
+        # `index.html` has a dot but is not all-numeric → must stay literal.
+        urls = [
+            "https://example.com/a/index.html",
+            "https://example.com/b/index.html",
+        ]
+        result = templatize(urls)
+        assert result["https://example.com/a/index.html"] == "/a/index.html"
+
     def test_root_path(self) -> None:
         result = templatize(["https://example.com/"])
         assert result["https://example.com/"] == "/"

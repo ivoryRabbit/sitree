@@ -89,7 +89,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [x] **버그 수정 ①: 시드 리다이렉트 → 유령 루트 노드.** `https://docs.python.org/`가 302→`/3/`. 디스커버리는 sitemap/seed-link의 referrer를 리다이렉트 *이전* 시드로 다는데 크롤 결과 URL엔 그게 없어 템플릿 조회 실패 → raw URL 폴백으로 samples 0개짜리 유령 루트 생성. `pipeline._build_graph`에서 `seed_norm`을 루트 결과 템플릿으로 별칭 처리 (`pipeline.py:40` 부근). 회귀 테스트 `test_pipeline.py`
 - [x] **버그 수정 ②: 머지 시 depth 덮어쓰기.** 같은 템플릿이 depth 0(시드 리다이렉트 타깃)과 depth 1(디스커버리)로 두 번 크롤되면 `add_node`가 depth를 마지막 값으로 덮어써 depth-0 루트가 사라짐. depth는 시드 최단거리이므로 머지 시 `min` 유지로 변경 (`graph.py` add_node). 회귀 테스트 `test_graph.py::test_merging_node_keeps_minimum_depth`
 - [x] **61 passed / ruff clean** — 2026-05-30
-- [ ] (관찰) 버전 디렉터리 `/3.10`·`/3.11`이 `/{id}`로 그룹화 안 됨 — `3.10`이 순수 숫자(`^\d+$`)도 슬러그(하이픈)도 아니라 id-like 미인식. 점 포함 버전 패턴 추가 검토 — **P3, 사소**
+- [x] 버전 디렉터리 `/3.10`·`/3.11`을 `/{id}`로 그룹화 — 2026-05-30. *`_VERSION = ^v?\d+(\.\d+)+$`를 `_looks_like_id`에 추가. 파일명(`3.14.html`)은 `.html` 때문에 매칭 안 돼 올바르게 유지. docs.python.org: 노드 47→24, LLM행 모호 템플릿 46→23(절반). 테스트 3건(`test_url_normalize.py`)*
 
 ## Phase 2 — AI 라벨링
 
@@ -99,7 +99,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [x] 프런트: 라벨별 색상·범례 패널 — 2026-05-30. *`LABEL_COLORS` export, `+page.svelte` 헤더에 그래프에 실재하는 라벨만 카운트와 함께 `$derived`로 범례 렌더*
 - [x] 테스트: LLM mock(fake Labeler + fake Anthropic client) + 캐시 hit/miss + 그룹당 1회 검증 — 2026-05-30. *`test_classifier.py`(휴리스틱/파싱/캐시/호출횟수/prompt-caching shape), `test_pipeline.py`(classify ON→라벨 적용·title 전달, OFF→None 유지). 92 passed*
 - [x] CLI `crawl --classify/--no-classify`, `--model`, `--cache` wire-up (기본 OFF로 오프라인 크롤 유지) — 2026-05-30
-- [ ] (관찰) docs.python.org 47템플릿 중 휴리스틱 확정 1, 모호 46 → 전부 LLM행. 버전 디렉터리(`/3.10`…)가 별 템플릿이라 그룹당 1회여도 호출 수가 큼. **P3 버전 템플릿화가 LLM 비용을 직접 절감** → 우선순위 상향 검토
+- [x] (해결) docs.python.org 모호 템플릿 46→23: **P3 버전 템플릿화로 LLM 호출 수 절반 절감** — 2026-05-30. 버전 디렉터리가 `/{id}`로 묶이면서 그룹 수 자체가 감소
 
 ## Phase 3 — JS 렌더링 / 인증
 
@@ -144,6 +144,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **버전 세그먼트(`3.10`, `v2.1.3`)도 `{id}`로 템플릿화.** 버전-루트 docs 트리를 한 노드로 묶어 그래프 정돈 + 분류 LLM 호출 수 직접 절감. 파일명(`x.html`)은 매칭 안 되게 순수 점-숫자 패턴만
 - 2026-05-30 — **디스커버리 `initial_urls`를 `list[str]`→`list[Link]`로.** 시드 페이지 링크의 anchor/position을 frontier까지 보존해야 시드→자식 엣지(주로 nav) 메타가 채워짐. sitemap(앵커 없음)과 seed 링크 중복 시 앵커 있는 쪽으로 업그레이드
 - 2026-05-30 — **분류 LLM은 `Labeler` 콜러블로 추상화 + 지연 생성.** 휴리스틱으로 못 가르는 그룹만 호출, 그룹당 1회(CLAUDE 규칙). 주입 가능해 테스트는 네트워크 0건, `crawl --classify` OFF면 anthropic 클라이언트/키 불필요
 - 2026-05-30 — **노드 머지 시 depth는 `min` 유지.** depth = 시드로부터 최단거리 의미. 시드 리다이렉트 타깃이 더 깊은 페이지에서도 링크될 때 덮어쓰기로 루트 깊이가 망가지던 것 수정
