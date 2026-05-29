@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import httpx
 
+from sitree.core.auth import AuthConfig
 from sitree.core.classifier import GroupInput
 from sitree.core.crawler import CrawlConfig, FetchResult
-from sitree.pipeline import ClassifyConfig, _build_graph, run_crawl
+from sitree.pipeline import ClassifyConfig, _build_client, _build_graph, run_crawl
 
 
 def _result(url: str, *, depth: int, referrer: str | None) -> FetchResult:
@@ -88,6 +89,20 @@ async def test_run_crawl_populates_edge_anchor_and_position() -> None:
     edge = next(e for e in graph.edges if e.target == "/about")
     assert edge.anchor_texts == ["About us"]
     assert edge.position == "nav"
+
+
+async def test_build_client_injects_auth() -> None:
+    auth = AuthConfig(cookies="session=abc", basic_auth=("u", "p"))
+    async with _build_client(CrawlConfig(), auth, "https://x.com/") as client:
+        assert client.headers["authorization"].startswith("Basic ")
+        assert client.cookies.get("session") == "abc"
+        assert client.headers["user-agent"].startswith("sitree/")
+
+
+async def test_build_client_without_auth_has_no_cookies() -> None:
+    async with _build_client(CrawlConfig(), None, "https://x.com/") as client:
+        assert "authorization" not in client.headers
+        assert len(client.cookies) == 0
 
 
 async def test_run_crawl_no_classify_leaves_labels_none() -> None:

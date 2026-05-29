@@ -10,6 +10,7 @@ from pathlib import Path
 import httpx
 from selectolax.parser import HTMLParser
 
+from sitree.core.auth import AuthConfig, to_http_auth
 from sitree.core.classifier import (
     DEFAULT_MODEL,
     AnthropicLabeler,
@@ -38,17 +39,17 @@ async def run_crawl(
     config: CrawlConfig,
     *,
     client: httpx.AsyncClient | None = None,
+    auth: AuthConfig | None = None,
     classify: ClassifyConfig | None = None,
     labeler: Labeler | None = None,
 ) -> SiteGraph:
     """Full batch crawl: discovery → BFS → graph build → optional AI labeling.
 
+    `auth` injects user-supplied credentials (cookies / storage_state / basic).
     `labeler` overrides the default Claude labeler (used in tests to avoid network).
     """
     if client is None:
-        async with httpx.AsyncClient(
-            headers={"User-Agent": config.user_agent}, timeout=config.timeout
-        ) as owned:
+        async with _build_client(config, auth, seed) as owned:
             return await run_crawl(
                 seed, config, client=owned, classify=classify, labeler=labeler
             )
@@ -71,6 +72,19 @@ async def run_crawl(
         await _classify_graph(graph, results, templates, classify, labeler)
 
     return graph
+
+
+def _build_client(
+    config: CrawlConfig, auth: AuthConfig | None, seed: str
+) -> httpx.AsyncClient:
+    """Construct the crawl's httpx client, injecting user-supplied auth (if any)."""
+    headers = {"User-Agent": config.user_agent}
+    cookies: dict[str, str] = {}
+    if auth is not None:
+        resolved = to_http_auth(auth, seed_url=seed)
+        headers.update(resolved.headers)
+        cookies = resolved.cookies
+    return httpx.AsyncClient(headers=headers, cookies=cookies, timeout=config.timeout)
 
 
 def _templatize_results(seed: str, results: list[FetchResult]) -> dict[str, str]:
@@ -157,5 +171,11 @@ async def _classify_graph(
             node.label = labels[node.template]
 
 
-def run_crawl_sync(seed: str, config: CrawlConfig, *, classify: ClassifyConfig | None = None) -> SiteGraph:
-    return asyncio.run(run_crawl(seed, config, classify=classify))
+def run_crawl_sync(
+    seed: str,
+    config: CrawlConfig,
+    *,
+    auth: AuthConfig | None = None,
+    classify: ClassifyConfig | None = None,
+) -> SiteGraph:
+    return asyncio.run(run_crawl(seed, config, auth=auth, classify=classify))

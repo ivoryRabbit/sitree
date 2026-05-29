@@ -4,6 +4,7 @@ from pathlib import Path
 
 import typer
 
+from sitree.core.auth import AuthConfig, parse_basic_auth
 from sitree.core.crawler import CrawlConfig
 from sitree.pipeline import ClassifyConfig, run_crawl_sync
 from sitree.schema import to_json
@@ -41,7 +42,10 @@ def crawl(
     ),
     model: str | None = typer.Option(None, help="Claude model for --classify."),
     cookies: str | None = typer.Option(None, help='Cookie header string, e.g. "k=v; k2=v2".'),
-    storage_state: Path | None = typer.Option(None, help="Playwright storage_state.json path."),
+    storage_state: Path | None = typer.Option(
+        None, exists=True, help="Playwright storage_state.json path."
+    ),
+    basic: str | None = typer.Option(None, help='HTTP Basic auth as "user:password".'),
     cache: Path | None = typer.Option(None, help="Cache directory for LLM label results."),
 ) -> None:
     """Batch-crawl a site and emit a SiteGraph JSON."""
@@ -52,11 +56,17 @@ def crawl(
         respect_robots=respect_robots,
     )
     classify_config = ClassifyConfig(enabled=classify, model=model, cache_dir=cache)
-    _ = cookies, storage_state  # consumed in later phases
-    typer.echo(
-        f"[crawl] seed={url} max_pages={max_pages} max_depth={max_depth} classify={classify}"
+    auth_config = AuthConfig(
+        cookies=cookies,
+        storage_state_path=storage_state,
+        basic_auth=parse_basic_auth(basic) if basic else None,
     )
-    graph = run_crawl_sync(url, config, classify=classify_config)
+    authed = any((cookies, storage_state, basic))
+    typer.echo(
+        f"[crawl] seed={url} max_pages={max_pages} max_depth={max_depth} "
+        f"classify={classify} auth={authed}"
+    )
+    graph = run_crawl_sync(url, config, auth=auth_config, classify=classify_config)
     output.write_text(to_json(graph), encoding="utf-8")
     labeled = sum(1 for n in graph.nodes if n.label is not None)
     suffix = f", {labeled} labeled" if classify else ""

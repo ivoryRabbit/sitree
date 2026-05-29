@@ -103,10 +103,10 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 ## Phase 3 — JS 렌더링 / 인증
 
+- [x] `auth.py` 구현 + 단위 테스트 — 2026-05-30. *`to_http_auth(AuthConfig)`→`HttpAuth(headers, cookies)`. 쿠키 헤더 파싱(`http.cookies.SimpleCookie`), basic auth(base64), storage_state.json에서 쿠키 추출 시 **시드 host로 도메인 필터**(타 도메인 쿠키 유출 방지). 자동 로그인 코드 없음(CLAUDE 준수). `test_auth.py` 10건*
+- [x] `--cookies`, `--storage-state`, `--basic` 옵션 — 2026-05-30. *`pipeline._build_client`가 auth를 httpx 헤더/쿠키로 주입. CLI 로그는 `auth={bool}`만 출력(쿠키/토큰 마스킹). `--storage-state`는 `exists=True`. 배선 테스트(`_build_client`)로 검증*
 - [ ] Playwright 자동 폴백 (JS 셸 감지 휴리스틱)
-- [ ] `--cookies`, `--storage-state` 옵션
-- [ ] `--auth-zone-only` (익명 vs 인증 diff 리포트)
-- [ ] `auth.py` 구현 + 단위 테스트
+- [ ] `--auth-zone-only` (익명 vs 인증 diff 리포트) — 후속 deliverable
 
 ## Phase 4 — Polish
 

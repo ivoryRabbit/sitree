@@ -17,7 +17,7 @@ def stub_run_crawl(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, object]]:
     """Replace pipeline.run_crawl_sync so CLI tests never touch the network."""
     calls: list[tuple[str, object]] = []
 
-    def fake(seed: str, config: object, *, classify: object = None) -> SiteGraph:
+    def fake(seed: str, config: object, *, auth: object = None, classify: object = None) -> SiteGraph:
         calls.append((seed, config))
         return SiteGraph(root=seed)
 
@@ -62,8 +62,9 @@ def test_crawl_passes_options_to_config(stub_run_crawl, tmp_path) -> None:
 def test_crawl_classify_flag_off_by_default(monkeypatch, tmp_path) -> None:
     captured: dict[str, object] = {}
 
-    def fake(seed, config, *, classify=None):
+    def fake(seed, config, *, auth=None, classify=None):
         captured["classify"] = classify
+        captured["auth"] = auth
         return SiteGraph(root=seed)
 
     monkeypatch.setattr(cli_module, "run_crawl_sync", fake)
