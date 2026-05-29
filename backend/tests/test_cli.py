@@ -77,6 +77,25 @@ def test_crawl_classify_flag_off_by_default(monkeypatch, tmp_path) -> None:
     assert captured["classify"].cache_dir == tmp_path
 
 
+def test_auth_zone_only_requires_credentials(stub_run_crawl, tmp_path) -> None:
+    out = tmp_path / "x.json"
+    result = runner.invoke(app, ["crawl", "https://example.com", "-o", str(out), "--auth-zone-only"])
+    assert result.exit_code == 2
+    assert "needs credentials" in result.output
+    assert stub_run_crawl == []  # never crawled
+
+
+def test_auth_zone_only_runs_two_crawls(stub_run_crawl, tmp_path) -> None:
+    out = tmp_path / "x.json"
+    result = runner.invoke(
+        app,
+        ["crawl", "https://example.com", "-o", str(out), "--auth-zone-only", "--cookies", "a=b"],
+    )
+    assert result.exit_code == 0, result.output
+    assert len(stub_run_crawl) == 2  # anon + authenticated
+    assert out.exists()
+
+
 def test_live_not_implemented_exits_nonzero() -> None:
     # Planned command: must signal not-implemented rather than exit 0 silently.
     result = runner.invoke(app, ["live", "https://example.com"])

@@ -6,6 +6,7 @@ import typer
 
 from sitree.core.auth import AuthConfig, parse_basic_auth
 from sitree.core.crawler import CrawlConfig
+from sitree.core.diff import auth_zone_diff
 from sitree.pipeline import ClassifyConfig, run_crawl_sync
 from sitree.schema import to_json
 
@@ -49,6 +50,11 @@ def crawl(
         None, exists=True, help="Playwright storage_state.json path."
     ),
     basic: str | None = typer.Option(None, help='HTTP Basic auth as "user:password".'),
+    auth_zone_only: bool = typer.Option(
+        False,
+        "--auth-zone-only",
+        help="Crawl anonymously and authenticated; emit only what auth reveals.",
+    ),
     cache: Path | None = typer.Option(None, help="Cache directory for LLM label results."),
 ) -> None:
     """Batch-crawl a site and emit a SiteGraph JSON."""
@@ -69,11 +75,31 @@ def crawl(
         basic_auth=parse_basic_auth(basic) if basic else None,
     )
     authed = any((cookies, storage_state, basic))
+
+    if auth_zone_only and not authed:
+        typer.secho(
+            "[crawl] --auth-zone-only needs credentials (--cookies/--storage-state/--basic)",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
     typer.echo(
         f"[crawl] seed={url} max_pages={max_pages} max_depth={max_depth} "
-        f"classify={classify} auth={authed}"
+        f"classify={classify} auth={authed} auth_zone_only={auth_zone_only}"
     )
-    graph = run_crawl_sync(url, config, auth=auth_config, classify=classify_config)
+
+    if auth_zone_only:
+        anon = run_crawl_sync(url, config)
+        full = run_crawl_sync(url, config, auth=auth_config, classify=classify_config)
+        graph = auth_zone_diff(anon, full)
+        typer.echo(
+            f"[crawl] auth zone: {len(graph.nodes)} nodes / {len(graph.edges)} edges "
+            f"only visible authenticated (anon={len(anon.nodes)}, full={len(full.nodes)})"
+        )
+    else:
+        graph = run_crawl_sync(url, config, auth=auth_config, classify=classify_config)
+
     output.write_text(to_json(graph), encoding="utf-8")
     labeled = sum(1 for n in graph.nodes if n.label is not None)
     suffix = f", {labeled} labeled" if classify else ""

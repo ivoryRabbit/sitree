@@ -107,7 +107,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [x] `--cookies`, `--storage-state`, `--basic` 옵션 — 2026-05-30. *`pipeline._build_client`가 auth를 httpx 헤더/쿠키로 주입. CLI 로그는 `auth={bool}`만 출력(쿠키/토큰 마스킹). `--storage-state`는 `exists=True`. 배선 테스트(`_build_client`)로 검증*
 - [x] Playwright 자동 폴백 (JS 셸 감지 휴리스틱) — 2026-05-30. *`looks_like_js_shell()`: 본문 단어<50 AND 링크<3 이면서 mount 노드(#root/#app/...)나 script≥3이면 셸로 판정. `crawl(render=RenderFn)` 주입 가능, worker가 `render_mode`(never/auto/always)에 따라 렌더 후 렌더된 HTML로 링크 재추출. `PlaywrightRenderer`는 단일 컨텍스트 재사용 async CM, playwright 지연 import, 이미지/폰트/미디어 차단, storage_state 주입. CLI `--render`. **fake-renderer로 배선 테스트**(셸만 렌더/never는 미호출/렌더 링크 크롤). 실제 chromium 스모크는 `playwright install chromium` 후 별도 — P3 잔여*
 - [ ] (잔여) 실제 Playwright 렌더 스모크 — chromium 미설치. `uv run playwright install chromium` 후 SPA 대상 1회 검증 필요
-- [ ] `--auth-zone-only` (익명 vs 인증 diff 리포트) — 후속 deliverable
+- [x] `--auth-zone-only` (익명 vs 인증 diff) — 2026-05-30. *`core/diff.py::auth_zone_diff(anon, authed)`: authed에만 있는 노드 + (source,target) 쌍이 anon에 없는 엣지. 새 엣지의 끝점 노드는 렌더 가능하게 끌어옴, 라벨은 authed에서 승계. CLI는 자격증명 없으면 exit 2, 있으면 익명+인증 2회 크롤 후 diff. 테스트: `test_diff.py` 4건 + CLI 2건*
 
 ## Phase 4 — Polish
 
