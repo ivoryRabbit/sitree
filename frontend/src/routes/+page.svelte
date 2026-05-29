@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import cytoscape from 'cytoscape';
 	import type { Core } from 'cytoscape';
-	import { toElements, stylesheet, defaultLayout, LABEL_COLORS } from '$lib/graph/cytoscape';
+	import { toElements, stylesheet, defaultLayout, legend } from '$lib/graph/cytoscape';
 	import type { SiteGraph, Node } from '$lib/types';
 	import example from '$lib/example.json';
 
@@ -46,18 +46,8 @@
 
 	onDestroy(() => cy?.destroy());
 
-	// Legend: counts per page-type label actually present in the graph,
-	// ordered by the canonical LABEL_COLORS key order.
-	const legend = $derived.by(() => {
-		const counts = new Map<string, number>();
-		for (const n of graph.nodes) {
-			const key = n.label ?? 'Other';
-			counts.set(key, (counts.get(key) ?? 0) + 1);
-		}
-		return Object.keys(LABEL_COLORS)
-			.filter((k) => counts.has(k))
-			.map((k) => ({ label: k, color: LABEL_COLORS[k], count: counts.get(k)! }));
-	});
+	// Legend: counts per page-type label actually present in the graph.
+	const legendItems = $derived(legend(graph));
 </script>
 
 <header>
@@ -66,7 +56,7 @@
 		<p class="subtitle">{graph.root} — {graph.nodes.length} nodes / {graph.edges.length} edges</p>
 	</div>
 	<ul class="legend">
-		{#each legend as item (item.label)}
+		{#each legendItems as item (item.label)}
 			<li>
 				<span class="swatch" style="background:{item.color}"></span>
 				{item.label} <span class="count">{item.count}</span>

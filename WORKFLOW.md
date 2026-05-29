@@ -82,7 +82,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [x] `.gitignore`에 `.coverage`/`.pytest_cache/` 추가, `pyproject` description 기본값 교체 — 2026-05-29
 - [x] **54 passed / ruff clean** — 2026-05-29
 - [x] `extract_links`가 anchor text·DOM 위치(nav/main/footer) 수집 → Edge 메타 채움 — 2026-05-30. *`extract_links` 반환을 `list[Link]`(url+anchor_text+position)로. `_link_position`이 가장 가까운 레이아웃 조상(nav/header→nav, footer→footer, main/article→main, else other) 판정. frontier `_Pending`이 메타를 날라 `FetchResult`에 incoming-link 메타 부착 → `_build_graph`가 엣지 `anchor_texts`/`position` 채움. **디스커버리도 시드 페이지 링크를 anchorless로 먼저 큐잉해 시드→자식(nav) 엣지가 비던 문제**를 발견 → `DiscoveryResult.initial_urls`를 `list[Link]`로 바꾸고, sitemap·seed 중복 시 앵커 있는 seed 링크로 업그레이드. 스모크: docs.python.org 46/46 엣지에 앵커, nav 21·other 25*
-- [ ] 프런트엔드 테스트 부재 (`npm test`가 CLAUDE.md에 있으나 vitest 미설정) — **P2**
+- [x] 프런트엔드 테스트 (vitest) — 2026-05-30. *`npm test` 동작. `cytoscape.ts` 어댑터 단위 테스트 9건(toElements 색상/border/current/엣지 매핑, legend 카운트/순서/빈 그래프). 컴포넌트 `+page.svelte`의 범례 로직을 순수 `legend()`로 추출해 테스트 가능하게. 테스트 설정은 별도 `vitest.config.ts`로 분리 — vite8+vitest3에서 `vitest/config`의 defineConfig가 sveltekit 플러그인과 타입 충돌하므로 sveltekit 플러그인 없는 별도 config가 정답*
 
 ### 1.5 실사이트 스모크 (2026-05-30)
 - [x] `sitree crawl https://docs.python.org --max-pages 50` → `sitree view`까지 풀 파이프라인 — 2026-05-30. *47노드/46엣지, 10초, robots 존중. view가 실데이터 서빙 확인(`/api/graph` 47노드, `/` 200)*

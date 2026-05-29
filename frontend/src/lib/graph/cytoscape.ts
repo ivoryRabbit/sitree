@@ -22,6 +22,24 @@ function nodeBorderStyle(state: NodeState): string {
 	return state === 'discovered' ? 'dashed' : 'solid';
 }
 
+export interface LegendEntry {
+	label: string;
+	color: string;
+	count: number;
+}
+
+/** Page-type counts for labels actually present in the graph, in canonical order. */
+export function legend(graph: SiteGraph): LegendEntry[] {
+	const counts = new Map<string, number>();
+	for (const n of graph.nodes) {
+		const key = n.label ?? 'Other';
+		counts.set(key, (counts.get(key) ?? 0) + 1);
+	}
+	return Object.keys(LABEL_COLORS)
+		.filter((k) => counts.has(k))
+		.map((k) => ({ label: k, color: LABEL_COLORS[k], count: counts.get(k)! }));
+}
+
 export function toElements(graph: SiteGraph): ElementDefinition[] {
 	const nodes: ElementDefinition[] = graph.nodes.map((n) => ({
 		data: {
