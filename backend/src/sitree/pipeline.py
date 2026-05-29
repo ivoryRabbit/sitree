@@ -18,7 +18,7 @@ from sitree.core.classifier import (
     Labeler,
     classify_groups,
 )
-from sitree.core.crawler import CrawlConfig, FetchResult, crawl
+from sitree.core.crawler import CrawlConfig, FetchResult, PlaywrightRenderer, crawl
 from sitree.core.discovery import discover
 from sitree.core.graph import GraphBuilder
 from sitree.core.url_normalize import normalize, templatize
@@ -62,8 +62,8 @@ async def run_crawl(
     if crawl_delay and crawl_delay > config.delay:
         config = replace(config, delay=crawl_delay)
 
-    results = await crawl(
-        seed, config, initial_urls=discovery.initial_urls, allowed=allowed, client=client
+    results = await _crawl_with_optional_render(
+        seed, config, auth, initial_urls=discovery.initial_urls, allowed=allowed, client=client
     )
     templates = _templatize_results(seed, results)
     graph = _build_graph(seed, results, config, templates)
@@ -85,6 +85,33 @@ def _build_client(
         headers.update(resolved.headers)
         cookies = resolved.cookies
     return httpx.AsyncClient(headers=headers, cookies=cookies, timeout=config.timeout)
+
+
+async def _crawl_with_optional_render(
+    seed: str,
+    config: CrawlConfig,
+    auth: AuthConfig | None,
+    *,
+    initial_urls,
+    allowed,
+    client,
+) -> list[FetchResult]:
+    """Run the BFS crawl, launching a shared Playwright renderer when render_mode
+    is enabled (storage_state is reused for the authenticated browser context)."""
+    if config.render_mode == "never":
+        return await crawl(
+            seed, config, initial_urls=initial_urls, allowed=allowed, client=client
+        )
+    storage = auth.storage_state_path if auth else None
+    async with PlaywrightRenderer(storage_state=storage, timeout=config.timeout) as renderer:
+        return await crawl(
+            seed,
+            config,
+            initial_urls=initial_urls,
+            allowed=allowed,
+            client=client,
+            render=renderer.render,
+        )
 
 
 def _templatize_results(seed: str, results: list[FetchResult]) -> dict[str, str]:

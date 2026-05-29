@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from sitree.core.crawler import CrawlConfig, crawl, extract_links, fetch
+from sitree.core.crawler import CrawlConfig, crawl, extract_links, fetch, looks_like_js_shell
 
 
 def test_extract_links_filters_non_http_and_normalizes(sample_html: str) -> None:
@@ -209,6 +209,71 @@ async def test_crawl_allowed_predicate_blocks_urls(fast_crawl_config: CrawlConfi
     assert "https://example.com/b" not in urls
     assert "https://example.com/b/deep" not in urls
     assert "https://example.com/a" in urls
+
+
+# --- JS render fallback ---
+
+
+def test_looks_like_js_shell_detects_spa() -> None:
+    shell = '<html><body><div id="root"></div><script src="/app.js"></script></body></html>'
+    assert looks_like_js_shell(shell) is True
+
+
+def test_looks_like_js_shell_false_for_content_page() -> None:
+    rich = "<html><body>" + "<p>word</p>" * 60 + "</body></html>"
+    assert looks_like_js_shell(rich) is False
+    assert looks_like_js_shell("") is False
+
+
+def test_looks_like_js_shell_false_when_links_present() -> None:
+    # Sparse text but plenty of links → not a shell (it's a nav/index page).
+    html = "<html><body>" + "".join(f'<a href="/{i}">x</a>' for i in range(5)) + "</body></html>"
+    assert looks_like_js_shell(html) is False
+
+
+async def test_crawl_renders_shell_pages_in_auto_mode() -> None:
+    shell = '<html><body><div id="app"></div><script></script><script></script><script></script></body></html>'
+    rendered = '<html><body><a href="/loaded">Loaded</a></body></html>'
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/":
+            return httpx.Response(200, text=shell, headers={"content-type": "text/html"})
+        return httpx.Response(200, text="<html><body>leaf</body></html>", headers={"content-type": "text/html"})
+
+    rendered_urls: list[str] = []
+
+    async def fake_render(url: str) -> str:
+        rendered_urls.append(url)
+        return rendered
+
+    config = CrawlConfig(delay=0, render_mode="auto")
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://example.com") as client:
+        results = await crawl("https://example.com/", config, client=client, render=fake_render)
+
+    urls = {r.url for r in results}
+    # The link only present in the *rendered* HTML was discovered and crawled.
+    assert "https://example.com/loaded" in urls
+    assert rendered_urls == ["https://example.com/"]  # only the shell page rendered
+
+
+async def test_crawl_never_mode_skips_render() -> None:
+    shell = '<html><body><div id="app"></div><script></script><script></script><script></script></body></html>'
+    calls: list[str] = []
+
+    async def fake_render(url: str) -> str:
+        calls.append(url)
+        return "<html></html>"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=shell, headers={"content-type": "text/html"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://example.com") as client:
+        await crawl("https://example.com/", CrawlConfig(delay=0, render_mode="never"), client=client, render=fake_render)
+
+    assert calls == []  # render_mode=never → renderer never invoked
 
 
 async def test_crawl_assigns_depth_and_referrer(fast_crawl_config: CrawlConfig) -> None:

@@ -37,6 +37,9 @@ def crawl(
     max_pages: int = typer.Option(500, help="Max pages to crawl."),
     concurrency: int = typer.Option(4, help="Max concurrent requests."),
     respect_robots: bool = typer.Option(True, "--respect-robots/--ignore-robots"),
+    render: str = typer.Option(
+        "never", help="JS render fallback: never | auto | always (needs Playwright)."
+    ),
     classify: bool = typer.Option(
         False, "--classify/--no-classify", help="AI-label page types (calls Claude per group)."
     ),
@@ -49,11 +52,15 @@ def crawl(
     cache: Path | None = typer.Option(None, help="Cache directory for LLM label results."),
 ) -> None:
     """Batch-crawl a site and emit a SiteGraph JSON."""
+    if render not in ("never", "auto", "always"):
+        typer.secho(f"[crawl] invalid --render {render!r} (never|auto|always)", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2)
     config = CrawlConfig(
         max_depth=max_depth,
         max_pages=max_pages,
         concurrency=concurrency,
         respect_robots=respect_robots,
+        render_mode=render,  # type: ignore[arg-type]
     )
     classify_config = ClassifyConfig(enabled=classify, model=model, cache_dir=cache)
     auth_config = AuthConfig(

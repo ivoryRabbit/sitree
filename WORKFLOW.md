@@ -105,7 +105,8 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 - [x] `auth.py` 구현 + 단위 테스트 — 2026-05-30. *`to_http_auth(AuthConfig)`→`HttpAuth(headers, cookies)`. 쿠키 헤더 파싱(`http.cookies.SimpleCookie`), basic auth(base64), storage_state.json에서 쿠키 추출 시 **시드 host로 도메인 필터**(타 도메인 쿠키 유출 방지). 자동 로그인 코드 없음(CLAUDE 준수). `test_auth.py` 10건*
 - [x] `--cookies`, `--storage-state`, `--basic` 옵션 — 2026-05-30. *`pipeline._build_client`가 auth를 httpx 헤더/쿠키로 주입. CLI 로그는 `auth={bool}`만 출력(쿠키/토큰 마스킹). `--storage-state`는 `exists=True`. 배선 테스트(`_build_client`)로 검증*
-- [ ] Playwright 자동 폴백 (JS 셸 감지 휴리스틱)
+- [x] Playwright 자동 폴백 (JS 셸 감지 휴리스틱) — 2026-05-30. *`looks_like_js_shell()`: 본문 단어<50 AND 링크<3 이면서 mount 노드(#root/#app/...)나 script≥3이면 셸로 판정. `crawl(render=RenderFn)` 주입 가능, worker가 `render_mode`(never/auto/always)에 따라 렌더 후 렌더된 HTML로 링크 재추출. `PlaywrightRenderer`는 단일 컨텍스트 재사용 async CM, playwright 지연 import, 이미지/폰트/미디어 차단, storage_state 주입. CLI `--render`. **fake-renderer로 배선 테스트**(셸만 렌더/never는 미호출/렌더 링크 크롤). 실제 chromium 스모크는 `playwright install chromium` 후 별도 — P3 잔여*
+- [ ] (잔여) 실제 Playwright 렌더 스모크 — chromium 미설치. `uv run playwright install chromium` 후 SPA 대상 1회 검증 필요
 - [ ] `--auth-zone-only` (익명 vs 인증 diff 리포트) — 후속 deliverable
 
 ## Phase 4 — Polish
@@ -144,6 +145,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **JS 렌더는 주입 가능한 `RenderFn` + 지연 Playwright.** `Labeler`와 같은 패턴 — 테스트는 fake로 브라우저 0회, 기본 `render_mode=never`라 Playwright 없이도 크롤 동작. auto는 휴리스틱 게이트, always는 전부 렌더
 - 2026-05-30 — **버전 세그먼트(`3.10`, `v2.1.3`)도 `{id}`로 템플릿화.** 버전-루트 docs 트리를 한 노드로 묶어 그래프 정돈 + 분류 LLM 호출 수 직접 절감. 파일명(`x.html`)은 매칭 안 되게 순수 점-숫자 패턴만
 - 2026-05-30 — **디스커버리 `initial_urls`를 `list[str]`→`list[Link]`로.** 시드 페이지 링크의 anchor/position을 frontier까지 보존해야 시드→자식 엣지(주로 nav) 메타가 채워짐. sitemap(앵커 없음)과 seed 링크 중복 시 앵커 있는 쪽으로 업그레이드
 - 2026-05-30 — **분류 LLM은 `Labeler` 콜러블로 추상화 + 지연 생성.** 휴리스틱으로 못 가르는 그룹만 호출, 그룹당 1회(CLAUDE 규칙). 주입 가능해 테스트는 네트워크 0건, `crawl --classify` OFF면 anthropic 클라이언트/키 불필요
