@@ -17,7 +17,7 @@ def stub_run_crawl(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, object]]:
     """Replace pipeline.run_crawl_sync so CLI tests never touch the network."""
     calls: list[tuple[str, object]] = []
 
-    def fake(seed: str, config: object) -> SiteGraph:
+    def fake(seed: str, config: object, *, classify: object = None) -> SiteGraph:
         calls.append((seed, config))
         return SiteGraph(root=seed)
 
@@ -57,6 +57,23 @@ def test_crawl_passes_options_to_config(stub_run_crawl, tmp_path) -> None:
     assert seed == "https://example.com"
     assert config.max_depth == 3
     assert config.respect_robots is False
+
+
+def test_crawl_classify_flag_off_by_default(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake(seed, config, *, classify=None):
+        captured["classify"] = classify
+        return SiteGraph(root=seed)
+
+    monkeypatch.setattr(cli_module, "run_crawl_sync", fake)
+    out = tmp_path / "x.json"
+    runner.invoke(app, ["crawl", "https://example.com", "-o", str(out)])
+    assert captured["classify"].enabled is False
+
+    runner.invoke(app, ["crawl", "https://example.com", "-o", str(out), "--classify", "--cache", str(tmp_path)])
+    assert captured["classify"].enabled is True
+    assert captured["classify"].cache_dir == tmp_path
 
 
 def test_live_not_implemented_exits_nonzero() -> None:

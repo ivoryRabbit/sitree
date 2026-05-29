@@ -93,11 +93,13 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 ## Phase 2 — AI 라벨링
 
-- [ ] `core/classifier.py`: URL 패턴 휴리스틱 → 모호 그룹만 Claude API 호출 (그룹당 1회)
-- [ ] Prompt caching 적용 (시스템 프롬프트 = `prompts/page_classify.md`)
-- [ ] LLM 결과 디스크 캐시 (`--cache` 디렉터리)
-- [ ] 프런트: 라벨별 색상·범례 패널
-- [ ] 테스트: `anthropic` 호출 mock + 캐시 hit/miss 검증
+- [x] `core/classifier.py`: URL 패턴 휴리스틱 → 모호 그룹만 Claude 호출 (그룹당 1회) — 2026-05-30. *`heuristic_label()`(Home/Auth/Search/PDP/Article/PLP 정규식, 순서 중요) → `classify_groups()`가 휴리스틱·캐시 미스만 `Labeler`로. `Labeler = Callable[[GroupInput], Awaitable[PageType]]` 주입 가능 → 테스트는 fake로 네트워크 0건. `AnthropicLabeler`는 지연 생성(classify OFF면 API 키 불필요)*
+- [x] Prompt caching 적용 (system = `prompts/page_classify.md`) — 2026-05-30. *system을 `cache_control: ephemeral` 블록으로 전송. 그룹마다 호출해도 system 재사용. 테스트가 요청 shape 검증*
+- [x] LLM 결과 디스크 캐시 (`--cache` 디렉터리) — 2026-05-30. *`LabelCache` → `cache_dir/labels.json`. 휴리스틱 결과는 캐시 안 함(결정적). 무효 라벨은 무시. hit 시 LLM 스킵을 테스트로 검증*
+- [x] 프런트: 라벨별 색상·범례 패널 — 2026-05-30. *`LABEL_COLORS` export, `+page.svelte` 헤더에 그래프에 실재하는 라벨만 카운트와 함께 `$derived`로 범례 렌더*
+- [x] 테스트: LLM mock(fake Labeler + fake Anthropic client) + 캐시 hit/miss + 그룹당 1회 검증 — 2026-05-30. *`test_classifier.py`(휴리스틱/파싱/캐시/호출횟수/prompt-caching shape), `test_pipeline.py`(classify ON→라벨 적용·title 전달, OFF→None 유지). 92 passed*
+- [x] CLI `crawl --classify/--no-classify`, `--model`, `--cache` wire-up (기본 OFF로 오프라인 크롤 유지) — 2026-05-30
+- [ ] (관찰) docs.python.org 47템플릿 중 휴리스틱 확정 1, 모호 46 → 전부 LLM행. 버전 디렉터리(`/3.10`…)가 별 템플릿이라 그룹당 1회여도 호출 수가 큼. **P3 버전 템플릿화가 LLM 비용을 직접 절감** → 우선순위 상향 검토
 
 ## Phase 3 — JS 렌더링 / 인증
 
@@ -142,6 +144,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **분류 LLM은 `Labeler` 콜러블로 추상화 + 지연 생성.** 휴리스틱으로 못 가르는 그룹만 호출, 그룹당 1회(CLAUDE 규칙). 주입 가능해 테스트는 네트워크 0건, `crawl --classify` OFF면 anthropic 클라이언트/키 불필요
 - 2026-05-30 — **노드 머지 시 depth는 `min` 유지.** depth = 시드로부터 최단거리 의미. 시드 리다이렉트 타깃이 더 깊은 페이지에서도 링크될 때 덮어쓰기로 루트 깊이가 망가지던 것 수정
 - 2026-05-29 — **프런트는 SPA(adapter-static fallback) + 런타임 `/api/graph` fetch.** 빌드 1개로 정적 데모(example 번들)와 `sitree view` 서빙을 모두 커버. 데이터를 빌드에 임베드하지 않아 임의 JSON을 띄울 수 있음
 - 2026-05-29 — **미구현 CLI 명령은 exit 1 + stderr 경고.** echo 후 exit 0이면 스크립트/자동화가 no-op을 성공으로 오인. Phase 게이트는 종료 코드로 명시

@@ -4,7 +4,7 @@
 import type { Core, ElementDefinition, StylesheetJson } from 'cytoscape';
 import type { SiteGraph, NodeState, PageType } from '../types';
 
-const LABEL_COLORS: Record<string, string> = {
+export const LABEL_COLORS: Record<string, string> = {
 	Home: '#2563eb',
 	Search: '#0891b2',
 	PLP: '#16a34a',

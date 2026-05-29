@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
+from pathlib import Path
 
 import httpx
+from selectolax.parser import HTMLParser
 
+from sitree.core.classifier import (
+    DEFAULT_MODEL,
+    AnthropicLabeler,
+    GroupInput,
+    Labeler,
+    classify_groups,
+)
 from sitree.core.crawler import CrawlConfig, FetchResult, crawl
 from sitree.core.discovery import discover
 from sitree.core.graph import GraphBuilder
@@ -15,15 +24,34 @@ from sitree.core.url_normalize import normalize, templatize
 from sitree.schema import CrawlMeta, SiteGraph
 
 
+@dataclass
+class ClassifyConfig:
+    """Opt-in AI labeling. When `enabled` is False the crawl stays offline."""
+
+    enabled: bool = False
+    model: str | None = None
+    cache_dir: Path | None = None
+
+
 async def run_crawl(
-    seed: str, config: CrawlConfig, *, client: httpx.AsyncClient | None = None
+    seed: str,
+    config: CrawlConfig,
+    *,
+    client: httpx.AsyncClient | None = None,
+    classify: ClassifyConfig | None = None,
+    labeler: Labeler | None = None,
 ) -> SiteGraph:
-    """Full Phase 1 batch crawl: discovery → BFS → graph build."""
+    """Full batch crawl: discovery → BFS → graph build → optional AI labeling.
+
+    `labeler` overrides the default Claude labeler (used in tests to avoid network).
+    """
     if client is None:
         async with httpx.AsyncClient(
             headers={"User-Agent": config.user_agent}, timeout=config.timeout
         ) as owned:
-            return await run_crawl(seed, config, client=owned)
+            return await run_crawl(
+                seed, config, client=owned, classify=classify, labeler=labeler
+            )
 
     discovery = await discover(seed, client)
     allowed = discovery.robots.can_fetch if config.respect_robots else None
@@ -36,23 +64,33 @@ async def run_crawl(
     results = await crawl(
         seed, config, initial_urls=discovery.initial_urls, allowed=allowed, client=client
     )
-    return _build_graph(seed, results, config)
+    templates = _templatize_results(seed, results)
+    graph = _build_graph(seed, results, config, templates)
+
+    if classify is not None and classify.enabled:
+        await _classify_graph(graph, results, templates, classify, labeler)
+
+    return graph
 
 
-def _build_graph(seed: str, results: list[FetchResult], config: CrawlConfig) -> SiteGraph:
-    urls = [r.url for r in results]
-    templates = templatize(urls)
-
-    # The seed can redirect (e.g. https://host/ -> https://host/3/). Discovery
-    # seeds sitemap/seed-page URLs with the *pre-redirect* seed as their referrer,
-    # which never appears as a crawled result. Without aliasing it to the root
-    # result's template, its lookup falls back to the raw URL and creates a
-    # phantom root node with no url_samples.
+def _templatize_results(seed: str, results: list[FetchResult]) -> dict[str, str]:
+    """URL -> template, with the redirected-seed alias applied (see _build_graph)."""
+    templates = templatize([r.url for r in results])
     seed_norm = normalize(seed)
     if seed_norm not in templates:
         root = next((r for r in results if r.referrer is None), None)
         if root is not None:
             templates[seed_norm] = templates.get(root.url, root.url)
+    return templates
+
+
+def _build_graph(
+    seed: str,
+    results: list[FetchResult],
+    config: CrawlConfig,
+    templates: dict[str, str] | None = None,
+) -> SiteGraph:
+    templates = templates if templates is not None else _templatize_results(seed, results)
 
     builder = GraphBuilder(root=seed)
     for r in results:
@@ -80,5 +118,43 @@ def _build_graph(seed: str, results: list[FetchResult], config: CrawlConfig) -> 
     return builder.to_site_graph(meta=meta)
 
 
-def run_crawl_sync(seed: str, config: CrawlConfig) -> SiteGraph:
-    return asyncio.run(run_crawl(seed, config))
+def _page_title(html: str) -> str | None:
+    if not html:
+        return None
+    node = HTMLParser(html).css_first("title")
+    text = node.text(strip=True) if node else None
+    return text or None
+
+
+async def _classify_graph(
+    graph: SiteGraph,
+    results: list[FetchResult],
+    templates: dict[str, str],
+    classify: ClassifyConfig,
+    labeler: Labeler | None,
+) -> None:
+    """Assign node.label in place. One LLM call per ambiguous template group."""
+    # First non-empty <title> per template becomes the representative.
+    titles: dict[str, str] = {}
+    for r in results:
+        tpl = templates.get(r.url)
+        if tpl and tpl not in titles:
+            title = _page_title(r.html)
+            if title:
+                titles[tpl] = title
+
+    groups = [
+        GroupInput(template=n.template, sample_urls=n.url_samples[:3], title=titles.get(n.template))
+        for n in graph.nodes
+    ]
+    if labeler is None:
+        labeler = AnthropicLabeler(model=classify.model or DEFAULT_MODEL)
+
+    labels = await classify_groups(groups, labeler=labeler, cache_dir=classify.cache_dir)
+    for node in graph.nodes:
+        if node.template in labels:
+            node.label = labels[node.template]
+
+
+def run_crawl_sync(seed: str, config: CrawlConfig, *, classify: ClassifyConfig | None = None) -> SiteGraph:
+    return asyncio.run(run_crawl(seed, config, classify=classify))

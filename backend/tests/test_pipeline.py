@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import httpx
+
+from sitree.core.classifier import GroupInput
 from sitree.core.crawler import CrawlConfig, FetchResult
-from sitree.pipeline import _build_graph
+from sitree.pipeline import ClassifyConfig, _build_graph, run_crawl
 
 
 def _result(url: str, *, depth: int, referrer: str | None) -> FetchResult:
@@ -28,3 +31,52 @@ def test_build_graph_aliases_redirected_seed() -> None:
     # The redirected seed's children connect to the real root template.
     root_tpl = next(n.template for n in graph.nodes if n.depth == 0)
     assert any(e.source == root_tpl for e in graph.edges)
+
+
+async def test_run_crawl_applies_labels_when_classify_enabled() -> None:
+    site = {
+        "/": '<html><head><title>Home</title></head><body><a href="/about">About</a></body></html>',
+        "/about": "<html><head><title>About us</title></head><body>about</body></html>",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = site.get(request.url.path)
+        if body is None:
+            return httpx.Response(404)
+        return httpx.Response(200, text=body, headers={"content-type": "text/html"})
+
+    seen: list[GroupInput] = []
+
+    async def fake_labeler(group: GroupInput):
+        seen.append(group)
+        return "Article"  # the only ambiguous template is /about
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://example.com") as client:
+        graph = await run_crawl(
+            "https://example.com/",
+            CrawlConfig(delay=0),
+            client=client,
+            classify=ClassifyConfig(enabled=True),
+            labeler=fake_labeler,
+        )
+
+    by_tpl = {n.template: n for n in graph.nodes}
+    assert by_tpl["/"].label == "Home"  # heuristic, no LLM
+    assert by_tpl["/about"].label == "Article"  # via fake labeler
+    # Representative title was threaded through to the group.
+    assert [g.template for g in seen] == ["/about"]
+    assert seen[0].title == "About us"
+
+
+async def test_run_crawl_no_classify_leaves_labels_none() -> None:
+    site = {"/": "<html><head><title>Home</title></head><body>hi</body></html>"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=site["/"], headers={"content-type": "text/html"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://example.com") as client:
+        graph = await run_crawl("https://example.com/", CrawlConfig(delay=0), client=client)
+
+    assert all(n.label is None for n in graph.nodes)

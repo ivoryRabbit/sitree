@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 
 from sitree.core.crawler import CrawlConfig
-from sitree.pipeline import run_crawl_sync
+from sitree.pipeline import ClassifyConfig, run_crawl_sync
 from sitree.schema import to_json
 
 app = typer.Typer(
@@ -36,9 +36,13 @@ def crawl(
     max_pages: int = typer.Option(500, help="Max pages to crawl."),
     concurrency: int = typer.Option(4, help="Max concurrent requests."),
     respect_robots: bool = typer.Option(True, "--respect-robots/--ignore-robots"),
+    classify: bool = typer.Option(
+        False, "--classify/--no-classify", help="AI-label page types (calls Claude per group)."
+    ),
+    model: str | None = typer.Option(None, help="Claude model for --classify."),
     cookies: str | None = typer.Option(None, help='Cookie header string, e.g. "k=v; k2=v2".'),
     storage_state: Path | None = typer.Option(None, help="Playwright storage_state.json path."),
-    cache: Path | None = typer.Option(None, help="Cache directory for LLM/HTTP results."),
+    cache: Path | None = typer.Option(None, help="Cache directory for LLM label results."),
 ) -> None:
     """Batch-crawl a site and emit a SiteGraph JSON."""
     config = CrawlConfig(
@@ -47,11 +51,18 @@ def crawl(
         concurrency=concurrency,
         respect_robots=respect_robots,
     )
-    _ = cookies, storage_state, cache  # consumed in later phases
-    typer.echo(f"[crawl] seed={url} max_pages={max_pages} max_depth={max_depth}")
-    graph = run_crawl_sync(url, config)
+    classify_config = ClassifyConfig(enabled=classify, model=model, cache_dir=cache)
+    _ = cookies, storage_state  # consumed in later phases
+    typer.echo(
+        f"[crawl] seed={url} max_pages={max_pages} max_depth={max_depth} classify={classify}"
+    )
+    graph = run_crawl_sync(url, config, classify=classify_config)
     output.write_text(to_json(graph), encoding="utf-8")
-    typer.echo(f"[crawl] wrote {output} ({len(graph.nodes)} nodes, {len(graph.edges)} edges)")
+    labeled = sum(1 for n in graph.nodes if n.label is not None)
+    suffix = f", {labeled} labeled" if classify else ""
+    typer.echo(
+        f"[crawl] wrote {output} ({len(graph.nodes)} nodes, {len(graph.edges)} edges{suffix})"
+    )
 
 
 @app.command()

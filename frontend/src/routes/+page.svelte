@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import cytoscape from 'cytoscape';
 	import type { Core } from 'cytoscape';
-	import { toElements, stylesheet, defaultLayout } from '$lib/graph/cytoscape';
+	import { toElements, stylesheet, defaultLayout, LABEL_COLORS } from '$lib/graph/cytoscape';
 	import type { SiteGraph, Node } from '$lib/types';
 	import example from '$lib/example.json';
 
@@ -45,11 +45,34 @@
 	});
 
 	onDestroy(() => cy?.destroy());
+
+	// Legend: counts per page-type label actually present in the graph,
+	// ordered by the canonical LABEL_COLORS key order.
+	const legend = $derived.by(() => {
+		const counts = new Map<string, number>();
+		for (const n of graph.nodes) {
+			const key = n.label ?? 'Other';
+			counts.set(key, (counts.get(key) ?? 0) + 1);
+		}
+		return Object.keys(LABEL_COLORS)
+			.filter((k) => counts.has(k))
+			.map((k) => ({ label: k, color: LABEL_COLORS[k], count: counts.get(k)! }));
+	});
 </script>
 
 <header>
-	<h1>sitree</h1>
-	<p class="subtitle">{graph.root} — {graph.nodes.length} nodes / {graph.edges.length} edges</p>
+	<div class="title">
+		<h1>sitree</h1>
+		<p class="subtitle">{graph.root} — {graph.nodes.length} nodes / {graph.edges.length} edges</p>
+	</div>
+	<ul class="legend">
+		{#each legend as item (item.label)}
+			<li>
+				<span class="swatch" style="background:{item.color}"></span>
+				{item.label} <span class="count">{item.count}</span>
+			</li>
+		{/each}
+	</ul>
 </header>
 
 <main>
@@ -86,10 +109,40 @@
 		padding: 0.75rem 1rem;
 		border-bottom: 1px solid #e2e8f0;
 		background: white;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
 	}
 	header h1 {
 		margin: 0;
 		font-size: 1.1rem;
+	}
+	.legend {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.85rem;
+		font-size: 0.75rem;
+		color: #475569;
+	}
+	.legend li {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.swatch {
+		width: 10px;
+		height: 10px;
+		border-radius: 2px;
+		display: inline-block;
+	}
+	.legend .count {
+		color: #94a3b8;
+		font-variant-numeric: tabular-nums;
 	}
 	.subtitle {
 		margin: 0.25rem 0 0;
