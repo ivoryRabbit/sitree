@@ -1,0 +1,78 @@
+{
+  "root": "https://example.com",
+  "nodes": [
+    {
+      "template": "/",
+      "url_samples": ["https://example.com/"],
+      "depth": 0,
+      "status_codes": [200],
+      "label": "Home",
+      "state": "visited",
+      "visit_count": 1,
+      "last_visited_at": null
+    },
+    {
+      "template": "/about",
+      "url_samples": ["https://example.com/about"],
+      "depth": 1,
+      "status_codes": [200],
+      "label": "Article",
+      "state": "visited",
+      "visit_count": 1,
+      "last_visited_at": null
+    },
+    {
+      "template": "/search",
+      "url_samples": ["https://example.com/search?q=foo"],
+      "depth": 1,
+      "status_codes": [200],
+      "label": "Search",
+      "state": "discovered",
+      "visit_count": 0,
+      "last_visited_at": null
+    },
+    {
+      "template": "/product/{id}",
+      "url_samples": [
+        "https://example.com/product/1",
+        "https://example.com/product/2",
+        "https://example.com/product/3"
+      ],
+      "depth": 2,
+      "status_codes": [200],
+      "label": "PDP",
+      "state": "current",
+      "visit_count": 2,
+      "last_visited_at": null
+    },
+    {
+      "template": "/products",
+      "url_samples": ["https://example.com/products"],
+      "depth": 1,
+      "status_codes": [200],
+      "label": "PLP",
+      "state": "visited",
+      "visit_count": 1,
+      "last_visited_at": null
+    },
+    {
+      "template": "/login",
+      "url_samples": ["https://example.com/login"],
+      "depth": 1,
+      "status_codes": [200],
+      "label": "Auth",
+      "state": "discovered",
+      "visit_count": 0,
+      "last_visited_at": null
+    }
+  ],
+  "edges": [
+    { "source": "/", "target": "/about", "anchor_texts": ["About"], "count": 1, "position": "nav" },
+    { "source": "/", "target": "/search", "anchor_texts": ["Search"], "count": 1, "position": "nav" },
+    { "source": "/", "target": "/products", "anchor_texts": ["Products"], "count": 1, "position": "nav" },
+    { "source": "/", "target": "/login", "anchor_texts": ["Login"], "count": 1, "position": "nav" },
+    { "source": "/products", "target": "/product/{id}", "anchor_texts": ["item"], "count": 12, "position": "main" },
+    { "source": "/search", "target": "/product/{id}", "anchor_texts": ["result"], "count": 4, "position": "main" }
+  ],
+  "meta": null
+}

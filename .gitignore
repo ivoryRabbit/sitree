@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+
+# Node
+node_modules/
+.svelte-kit/
+frontend/build/
+
+# Auth secrets — NEVER commit
+*.storage-state.json
+storage_state.json
+cookies.txt
+.env
+.env.*
+!.env.example
+
+# sitree caches & outputs
+.sitree-cache/
+out.json
+report.html
+examples/*.json
+!examples/.gitkeep
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
