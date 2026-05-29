@@ -11,7 +11,7 @@ import httpx
 from sitree.core.crawler import CrawlConfig, FetchResult, crawl
 from sitree.core.discovery import discover
 from sitree.core.graph import GraphBuilder
-from sitree.core.url_normalize import templatize
+from sitree.core.url_normalize import normalize, templatize
 from sitree.schema import CrawlMeta, SiteGraph
 
 
@@ -42,6 +42,17 @@ async def run_crawl(
 def _build_graph(seed: str, results: list[FetchResult], config: CrawlConfig) -> SiteGraph:
     urls = [r.url for r in results]
     templates = templatize(urls)
+
+    # The seed can redirect (e.g. https://host/ -> https://host/3/). Discovery
+    # seeds sitemap/seed-page URLs with the *pre-redirect* seed as their referrer,
+    # which never appears as a crawled result. Without aliasing it to the root
+    # result's template, its lookup falls back to the raw URL and creates a
+    # phantom root node with no url_samples.
+    seed_norm = normalize(seed)
+    if seed_norm not in templates:
+        root = next((r for r in results if r.referrer is None), None)
+        if root is not None:
+            templates[seed_norm] = templates.get(root.url, root.url)
 
     builder = GraphBuilder(root=seed)
     for r in results:

@@ -25,6 +25,21 @@ def test_adding_same_node_merges_url_samples() -> None:
     assert samples == {"https://x.com/p/1", "https://x.com/p/2"}
 
 
+def test_merging_node_keeps_minimum_depth() -> None:
+    # Same template reached at depth 0 (seed redirect) and depth 1 (deeper link):
+    # depth means shortest distance from seed, so the shallower value must win
+    # regardless of insertion order.
+    b = GraphBuilder(root="https://x.com")
+    b.add_node("/{id}", depth=1, url_samples=["https://x.com/3/"])
+    b.add_node("/{id}", depth=0, url_samples=["https://x.com/3/"])
+    assert b.to_site_graph().nodes[0].depth == 0
+
+    b2 = GraphBuilder(root="https://x.com")
+    b2.add_node("/{id}", depth=0)
+    b2.add_node("/{id}", depth=2)
+    assert b2.to_site_graph().nodes[0].depth == 0
+
+
 def test_repeated_edge_increments_count() -> None:
     b = GraphBuilder(root="https://x.com")
     b.add_edge("/", "/a", anchor_texts=["A"])

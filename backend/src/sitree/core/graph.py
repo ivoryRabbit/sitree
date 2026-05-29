@@ -22,8 +22,15 @@ class GraphBuilder:
                 if key in attrs:
                     merged = list({*existing.get(key, []), *attrs[key]})  # type: ignore[misc]
                     existing[key] = merged
+            # depth = shortest distance from seed: keep the minimum across merges
+            # (the same template can be reached at different depths, e.g. a seed
+            # redirect target also linked from a deeper page).
+            if "depth" in attrs and "depth" in existing:
+                existing["depth"] = min(existing["depth"], attrs["depth"])  # type: ignore[type-var]
+            elif "depth" in attrs:
+                existing["depth"] = attrs["depth"]
             for k, v in attrs.items():
-                if k not in ("url_samples", "status_codes"):
+                if k not in ("url_samples", "status_codes", "depth"):
                     existing[k] = v
         else:
             self._g.add_node(template, **attrs)

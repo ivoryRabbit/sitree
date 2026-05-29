@@ -84,6 +84,13 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [ ] `extract_links`가 anchor text·DOM 위치(nav/main/footer) 미수집 → Edge 메타가 빈 껍데기 (PLAN의 "앵커 텍스트·위치 메타" 미충족). frontier에 anchor/position 실어 나르는 리팩토 필요 — **P2, 별도 패스**
 - [ ] 프런트엔드 테스트 부재 (`npm test`가 CLAUDE.md에 있으나 vitest 미설정) — **P2**
 
+### 1.5 실사이트 스모크 (2026-05-30)
+- [x] `sitree crawl https://docs.python.org --max-pages 50` → `sitree view`까지 풀 파이프라인 — 2026-05-30. *47노드/46엣지, 10초, robots 존중. view가 실데이터 서빙 확인(`/api/graph` 47노드, `/` 200)*
+- [x] **버그 수정 ①: 시드 리다이렉트 → 유령 루트 노드.** `https://docs.python.org/`가 302→`/3/`. 디스커버리는 sitemap/seed-link의 referrer를 리다이렉트 *이전* 시드로 다는데 크롤 결과 URL엔 그게 없어 템플릿 조회 실패 → raw URL 폴백으로 samples 0개짜리 유령 루트 생성. `pipeline._build_graph`에서 `seed_norm`을 루트 결과 템플릿으로 별칭 처리 (`pipeline.py:40` 부근). 회귀 테스트 `test_pipeline.py`
+- [x] **버그 수정 ②: 머지 시 depth 덮어쓰기.** 같은 템플릿이 depth 0(시드 리다이렉트 타깃)과 depth 1(디스커버리)로 두 번 크롤되면 `add_node`가 depth를 마지막 값으로 덮어써 depth-0 루트가 사라짐. depth는 시드 최단거리이므로 머지 시 `min` 유지로 변경 (`graph.py` add_node). 회귀 테스트 `test_graph.py::test_merging_node_keeps_minimum_depth`
+- [x] **61 passed / ruff clean** — 2026-05-30
+- [ ] (관찰) 버전 디렉터리 `/3.10`·`/3.11`이 `/{id}`로 그룹화 안 됨 — `3.10`이 순수 숫자(`^\d+$`)도 슬러그(하이픈)도 아니라 id-like 미인식. 점 포함 버전 패턴 추가 검토 — **P3, 사소**
+
 ## Phase 2 — AI 라벨링
 
 - [ ] `core/classifier.py`: URL 패턴 휴리스틱 → 모호 그룹만 Claude API 호출 (그룹당 1회)
@@ -135,6 +142,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **노드 머지 시 depth는 `min` 유지.** depth = 시드로부터 최단거리 의미. 시드 리다이렉트 타깃이 더 깊은 페이지에서도 링크될 때 덮어쓰기로 루트 깊이가 망가지던 것 수정
 - 2026-05-29 — **프런트는 SPA(adapter-static fallback) + 런타임 `/api/graph` fetch.** 빌드 1개로 정적 데모(example 번들)와 `sitree view` 서빙을 모두 커버. 데이터를 빌드에 임베드하지 않아 임의 JSON을 띄울 수 있음
 - 2026-05-29 — **미구현 CLI 명령은 exit 1 + stderr 경고.** echo 후 exit 0이면 스크립트/자동화가 no-op을 성공으로 오인. Phase 게이트는 종료 코드로 명시
 - 2026-05-29 — **LiveOp를 schema.py의 단일 소스로 승격.** 라이브 op이 types.ts에만 있어 Phase 5에서 드리프트 위험. 지금 dataclass로 고정
