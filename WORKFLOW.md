@@ -124,11 +124,14 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 - [x] `live/session.py::LiveSession`: `VisitEvent`→증분 `LiveOp` + `snapshot()`. 방문→노드 visited/current, 이전 current는 visited로 강등, referrer(없으면 직전 페이지)로 엣지, 페이지 링크는 discovered(점선) 노드/엣지로. 라이브용 `templatize_one`(카디널리티 없이 단일 URL 템플릿). 테스트 5건
 - [x] `live/hub.py::LiveHub`: 구독자별 큐 fan-out(`publish`/`subscribe`/`unsubscribe`). 테스트 3건
 - [x] `server.py`: `WS /api/live`(hub 연결 시 op 배치 스트림) + `/api/graph`가 `graph_provider`(LiveSession.snapshot)로 동적 스냅샷. `schema.to_jsonable` 공개. 테스트(동적 provider, hub 없을 때 close). **실제 WS 라운드트립은 5b CLI 스모크로**
-### 5b 브라우저·프런트 배선
-- [ ] `live/playwright_bridge.py`: Chromium 런처 + 네비게이션 이벤트 수집
-- [ ] `sitree live <url>` 동작: 브라우저 띄우고 대시보드 URL 출력 (서버+브리지 동시 실행)
-- [ ] 프런트 `/live`: WS 구독, 노드 상태(`discovered`/`visited`/`current`) 시각화
-- [ ] SPA `history.pushState` 감지
+### 5b 브라우저·프런트 배선 — 2026-05-30
+- [x] `live/playwright_bridge.py::PlaywrightLiveBridge`: headed Chromium, `framenavigated`+seed goto로 `VisitEvent`(url/referrer/links) emit. playwright 지연 import. 직전 URL과 같으면 dedup
+- [x] SPA `history.pushState` 감지: `expose_binding("__sitree_nav")` + init script가 pushState/replaceState/popstate 후킹 → 바인딩 호출
+- [x] `live/runner.py::run_live`: uvicorn `Server`를 task로 띄우고 브리지를 같은 루프에서 실행. 이벤트→`session.visit`→`hub.publish`. 창 닫으면 서버 종료, 대시보드 탭 자동 오픈
+- [x] `sitree live <url>`: capture=playwright만 동작(그 외 exit 1), `--auto-expand`는 경고 후 무시. runner 호출(테스트는 stub으로 브라우저 미실행)
+- [x] 프런트 `/live`: 초기 `/api/graph` 로드 → `WS /api/live` 구독 → `applyLiveOps` 리듀서로 graph fold + cytoscape 증분(add_node/add_edge, state/current 갱신, 구조 변경 시 relayout). 연결 배지. `cytoscape.ts`에 `toNodeElement`/`toEdgeElement`/`edgeId` 추출. 리듀서 테스트 5건(`live.test.ts`)
+- [x] **E2E WS 스모크**: uvicorn+websockets+hub publish를 동일 루프에서 — 방문 op 배치 수신 + `/api/graph` 스냅샷 정확 확인
+- [ ] (잔여) headed Chromium 실제 탐색 스모크 — 인터랙티브/chromium 설치 필요. `uv run playwright install chromium` 후 `sitree live` 수동 확인
 
 ## Phase 6 — Live: CDP attach
 
@@ -148,6 +151,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **라이브 모드: 캡처/세션/전송 분리.** `LiveSession`(순수, 테스트), `LiveHub`(WS fan-out), `PlaywrightLiveBridge`(브라우저). 같은 `VisitEvent` 스트림이라 Phase 6 CDP 브리지를 같은 인터페이스로 추가 가능. WS는 op 배치(JSON 배열) push, 프런트는 `applyLiveOps`로 fold
 - 2026-05-30 — **JS 렌더는 주입 가능한 `RenderFn` + 지연 Playwright.** `Labeler`와 같은 패턴 — 테스트는 fake로 브라우저 0회, 기본 `render_mode=never`라 Playwright 없이도 크롤 동작. auto는 휴리스틱 게이트, always는 전부 렌더
 - 2026-05-30 — **버전 세그먼트(`3.10`, `v2.1.3`)도 `{id}`로 템플릿화.** 버전-루트 docs 트리를 한 노드로 묶어 그래프 정돈 + 분류 LLM 호출 수 직접 절감. 파일명(`x.html`)은 매칭 안 되게 순수 점-숫자 패턴만
 - 2026-05-30 — **디스커버리 `initial_urls`를 `list[str]`→`list[Link]`로.** 시드 페이지 링크의 anchor/position을 frontier까지 보존해야 시드→자식 엣지(주로 nav) 메타가 채워짐. sitemap(앵커 없음)과 seed 링크 중복 시 앵커 있는 쪽으로 업그레이드
