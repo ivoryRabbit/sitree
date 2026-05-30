@@ -143,8 +143,21 @@ def live(
     storage_state: Path | None = typer.Option(None, help="Playwright storage_state.json path."),
 ) -> None:
     """Start live exploration mode: open browser, watch the user's navigation, update graph in real time."""
-    _ = url, capture, port, auto_expand, storage_state
-    _not_implemented("live", "Phase 5")
+    if capture != "playwright":
+        typer.secho(
+            f"[live] capture={capture!r} not yet implemented (Phase 6+); use 'playwright'.",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if auto_expand:
+        typer.secho("[live] --auto-expand not implemented yet; ignoring.", fg=typer.colors.YELLOW, err=True)
+
+    from sitree.live.runner import run_live_sync
+
+    dashboard = f"http://127.0.0.1:{port}/live"
+    typer.echo(f"[live] seed={url} → opening Chromium; dashboard at {dashboard} (close the window to stop)")
+    run_live_sync(url, port=port, storage_state=storage_state)
 
 
 @app.command()
