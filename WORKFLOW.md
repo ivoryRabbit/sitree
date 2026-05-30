@@ -111,10 +111,10 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 ## Phase 4 — Polish
 
-- [ ] `--respect-robots/--ignore-robots`
-- [ ] 동시성·rate-limit·delay 옵션
-- [ ] 통계 패널 (총 URL/템플릿/깊이/외부 링크)
-- [ ] `sitree report <json>` 단일 HTML 리포트
+- [x] `--respect-robots/--ignore-robots` — Phase 1에서 이미 wire-up됨 (재확인 2026-05-30)
+- [x] 동시성·rate-limit·delay 옵션 — 2026-05-30. *`--concurrency`(기존)+`--delay`(신규) CLI 노출. `CrawlConfig.delay`로 전달, robots crawl-delay가 더 크면 그쪽 우선(기존 로직)*
+- [x] 통계 패널 (총 URL/템플릿/깊이/외부 링크) — 2026-05-30. *`core/stats.py::compute_stats`→`GraphStats`(노드/엣지/url샘플/max depth/외부링크/by_label/by_depth/by_position). 외부링크는 타깃 url_sample host≠root host로 판정. 리포트 사이드패널에 렌더. 대시보드는 기존 범례가 page-type 분해 담당. 테스트 5건*
+- [x] `sitree report <json>` 단일 HTML 리포트 — 2026-05-30. *`report.py::render_report`: 그래프 JSON 인라인 임베드 + cytoscape CDN = 단일 공유 .html(서버 불필요). 통계 패널·page-type 범례·depth 분포 포함. HTML escape 적용. 스모크: docs.python.org 24노드→18KB 자립 HTML. 테스트 4건 + CLI 1건*
 
 ## Phase 5 — Live Exploration MVP (Playwright 런처)
 
@@ -151,6 +151,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **`sitree report`는 단일 자립 HTML(데이터 인라인 + cytoscape CDN).** `view`(서버+SPA)와 달리 공유용. 도메인 통계는 `core/stats.py`로 분리해 report·대시보드가 공유 가능
 - 2026-05-30 — **라이브 모드: 캡처/세션/전송 분리.** `LiveSession`(순수, 테스트), `LiveHub`(WS fan-out), `PlaywrightLiveBridge`(브라우저). 같은 `VisitEvent` 스트림이라 Phase 6 CDP 브리지를 같은 인터페이스로 추가 가능. WS는 op 배치(JSON 배열) push, 프런트는 `applyLiveOps`로 fold
 - 2026-05-30 — **JS 렌더는 주입 가능한 `RenderFn` + 지연 Playwright.** `Labeler`와 같은 패턴 — 테스트는 fake로 브라우저 0회, 기본 `render_mode=never`라 Playwright 없이도 크롤 동작. auto는 휴리스틱 게이트, always는 전부 렌더
 - 2026-05-30 — **버전 세그먼트(`3.10`, `v2.1.3`)도 `{id}`로 템플릿화.** 버전-루트 docs 트리를 한 노드로 묶어 그래프 정돈 + 분류 LLM 호출 수 직접 절감. 파일명(`x.html`)은 매칭 안 되게 순수 점-숫자 패턴만

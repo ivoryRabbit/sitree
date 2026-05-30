@@ -37,6 +37,7 @@ def crawl(
     max_depth: int = typer.Option(5, help="Max crawl depth from seed."),
     max_pages: int = typer.Option(500, help="Max pages to crawl."),
     concurrency: int = typer.Option(4, help="Max concurrent requests."),
+    delay: float = typer.Option(0.5, help="Politeness delay (seconds) between requests."),
     respect_robots: bool = typer.Option(True, "--respect-robots/--ignore-robots"),
     render: str = typer.Option(
         "never", help="JS render fallback: never | auto | always (needs Playwright)."
@@ -65,6 +66,7 @@ def crawl(
         max_depth=max_depth,
         max_pages=max_pages,
         concurrency=concurrency,
+        delay=delay,
         respect_robots=respect_robots,
         render_mode=render,  # type: ignore[arg-type]
     )
@@ -166,8 +168,12 @@ def report(
     output: Path = typer.Option(Path("report.html"), "-o", "--output", help="Output HTML path."),
 ) -> None:
     """Generate a single static HTML report from a SiteGraph JSON."""
-    _ = path, output
-    _not_implemented("report", "Phase 4")
+    from sitree.report import render_report
+    from sitree.schema import from_json
+
+    graph = from_json(path.read_text(encoding="utf-8"))
+    output.write_text(render_report(graph), encoding="utf-8")
+    typer.echo(f"[report] wrote {output} ({len(graph.nodes)} nodes, {len(graph.edges)} edges)")
 
 
 if __name__ == "__main__":

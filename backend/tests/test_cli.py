@@ -151,3 +151,15 @@ def test_view_errors_without_frontend_build(tmp_path, monkeypatch) -> None:
     result = runner.invoke(app, ["view", str(p)])
     assert result.exit_code == 1
     assert "frontend build not found" in result.output
+
+
+def test_report_generates_html(tmp_path) -> None:
+    graph_json = tmp_path / "g.json"
+    graph_json.write_text(
+        '{"root":"https://x.com","nodes":[{"template":"/","url_samples":["https://x.com/"]}],"edges":[]}'
+    )
+    out = tmp_path / "report.html"
+    result = runner.invoke(app, ["report", str(graph_json), "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert out.read_text().startswith("<!doctype html>")
