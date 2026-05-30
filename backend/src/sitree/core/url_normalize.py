@@ -87,6 +87,21 @@ def _segment_template(seg: str) -> str:
     return "{id}" if _looks_like_id(seg) else seg
 
 
+def templatize_one(url: str, *, identity_keys: frozenset[str] = IDENTITY_KEYS) -> str:
+    """Template a single URL without cardinality analysis.
+
+    For live mode, where URLs arrive one at a time and the batch `templatize`
+    cardinality guard isn't available. Each id-like segment becomes `{id}`.
+    """
+    parts = urlsplit(url)
+    segs = [s for s in parts.path.split("/") if s]
+    path_t = "/" + "/".join(_segment_template(s) for s in segs) if segs else "/"
+    keep = sorted(k for k, _ in parse_qsl(parts.query, keep_blank_values=True) if k in identity_keys)
+    if keep:
+        return f"{path_t}?" + "&".join(f"{k}=*" for k in keep)
+    return path_t
+
+
 def templatize(urls: list[str], options: TemplateOptions | None = None) -> dict[str, str]:
     """Map each normalized URL → template string.
 

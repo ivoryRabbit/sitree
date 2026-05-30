@@ -56,6 +56,7 @@ class VisitEvent:
     url: str
     at: datetime
     referrer: str | None = None
+    links: list[str] = field(default_factory=list)  # outbound hrefs seen on the page
 
 
 LiveOpKind = Literal["visit", "add_node", "add_edge", "current"]
@@ -106,6 +107,11 @@ def _to_jsonable(value: Any) -> Any:
 
 def to_dict(graph: SiteGraph) -> dict[str, Any]:
     return _to_jsonable(graph)
+
+
+def to_jsonable(value: Any) -> Any:
+    """Public JSON-safe converter for any dataclass/datetime/list (e.g. LiveOps)."""
+    return _to_jsonable(value)
 
 
 def to_json(graph: SiteGraph, *, indent: int | None = 2) -> str:

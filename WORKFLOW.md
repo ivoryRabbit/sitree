@@ -120,10 +120,13 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > [docs/live-exploration.md](docs/live-exploration.md) 참고
 
-- [ ] `server.py`: FastAPI + WS 엔드포인트 (`GET /api/graph`, `WS /api/live`)
+### 5a 라이브 코어 (테스트 가능, 브라우저 무관) — 2026-05-30
+- [x] `live/session.py::LiveSession`: `VisitEvent`→증분 `LiveOp` + `snapshot()`. 방문→노드 visited/current, 이전 current는 visited로 강등, referrer(없으면 직전 페이지)로 엣지, 페이지 링크는 discovered(점선) 노드/엣지로. 라이브용 `templatize_one`(카디널리티 없이 단일 URL 템플릿). 테스트 5건
+- [x] `live/hub.py::LiveHub`: 구독자별 큐 fan-out(`publish`/`subscribe`/`unsubscribe`). 테스트 3건
+- [x] `server.py`: `WS /api/live`(hub 연결 시 op 배치 스트림) + `/api/graph`가 `graph_provider`(LiveSession.snapshot)로 동적 스냅샷. `schema.to_jsonable` 공개. 테스트(동적 provider, hub 없을 때 close). **실제 WS 라운드트립은 5b CLI 스모크로**
+### 5b 브라우저·프런트 배선
 - [ ] `live/playwright_bridge.py`: Chromium 런처 + 네비게이션 이벤트 수집
-- [ ] `sitree live <url>` 동작: 브라우저 띄우고 대시보드 URL 출력
-- [ ] `VisitEvent` → 그래프 증분 업데이트 → WS push
+- [ ] `sitree live <url>` 동작: 브라우저 띄우고 대시보드 URL 출력 (서버+브리지 동시 실행)
 - [ ] 프런트 `/live`: WS 구독, 노드 상태(`discovered`/`visited`/`current`) 시각화
 - [ ] SPA `history.pushState` 감지
 
