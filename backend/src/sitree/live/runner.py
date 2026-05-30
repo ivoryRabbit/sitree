@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from sitree.live.cdp_bridge import CdpLiveBridge
 from sitree.live.hub import LiveHub
 from sitree.live.playwright_bridge import PlaywrightLiveBridge
 from sitree.live.session import LiveSession
@@ -16,13 +17,23 @@ from sitree.schema import VisitEvent
 from sitree.server import create_app
 
 
+def _make_bridge(
+    capture: str, *, storage_state: Path | None, headless: bool, cdp_endpoint: str
+) -> object:
+    if capture == "cdp":
+        return CdpLiveBridge(endpoint=cdp_endpoint)
+    return PlaywrightLiveBridge(storage_state=storage_state, headless=headless)
+
+
 async def run_live(
     seed: str,
     *,
     host: str = "127.0.0.1",
     port: int = 8765,
+    capture: str = "playwright",
     storage_state: Path | None = None,
     headless: bool = False,
+    cdp_endpoint: str = "http://localhost:9222",
     open_dashboard: bool = True,
 ) -> None:
     import uvicorn
@@ -32,7 +43,9 @@ async def run_live(
     app = create_app(graph_provider=session.snapshot, hub=hub)
 
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
-    bridge = PlaywrightLiveBridge(storage_state=storage_state, headless=headless)
+    bridge = _make_bridge(
+        capture, storage_state=storage_state, headless=headless, cdp_endpoint=cdp_endpoint
+    )
 
     async def on_event(event: VisitEvent) -> None:
         await hub.publish(session.visit(event))
@@ -59,8 +72,10 @@ def run_live_sync(
     *,
     host: str = "127.0.0.1",
     port: int = 8765,
+    capture: str = "playwright",
     storage_state: Path | None = None,
     headless: bool = False,
+    cdp_endpoint: str = "http://localhost:9222",
     open_dashboard: bool = True,
 ) -> None:
     asyncio.run(
@@ -68,8 +83,10 @@ def run_live_sync(
             seed,
             host=host,
             port=port,
+            capture=capture,
             storage_state=storage_state,
             headless=headless,
+            cdp_endpoint=cdp_endpoint,
             open_dashboard=open_dashboard,
         )
     )

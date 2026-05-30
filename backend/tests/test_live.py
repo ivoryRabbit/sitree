@@ -128,3 +128,25 @@ def test_live_ws_closes_without_hub() -> None:
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect("/api/live") as ws:
             ws.receive_text()
+
+
+# --- Phase 6: CDP bridge ---
+
+
+def test_cdp_help_includes_endpoint_port() -> None:
+    from sitree.live.cdp_bridge import cdp_help
+
+    text = cdp_help("http://localhost:9333")
+    assert "9333" in text
+    assert "--remote-debugging-port=9333" in text
+
+
+def test_make_bridge_selects_implementation() -> None:
+    from sitree.live.cdp_bridge import CdpLiveBridge
+    from sitree.live.playwright_bridge import PlaywrightLiveBridge
+    from sitree.live.runner import _make_bridge
+
+    cdp = _make_bridge("cdp", storage_state=None, headless=True, cdp_endpoint="http://localhost:9222")
+    pw = _make_bridge("playwright", storage_state=None, headless=True, cdp_endpoint="http://localhost:9222")
+    assert isinstance(cdp, CdpLiveBridge)
+    assert isinstance(pw, PlaywrightLiveBridge)

@@ -135,9 +135,10 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 ## Phase 6 — Live: CDP attach
 
-- [ ] `live/cdp_bridge.py` (`playwright.connect_over_cdp`)
-- [ ] `sitree live --capture cdp` 옵션
-- [ ] 사용자 Chrome을 디버그 포트로 켜는 helper/wrapper + 가이드 문서
+- [x] `live/cdp_bridge.py::CdpLiveBridge` (`connect_over_cdp`) — 2026-05-30. *기존 context/page 재사용(사용자 평소 탭), about:blank일 때만 seed로 이동. playwright_bridge의 페이지 관찰 로직을 `observe_page()`로 추출해 런처/CDP가 공유 — 같은 VisitEvent 스트림. CDP attach는 이미 열린 페이지도 즉시 캡처(observe_page가 현재 url emit)*
+- [x] `sitree live --capture cdp` 옵션 + `--cdp-endpoint` — 2026-05-30. *runner `_make_bridge`가 capture로 분기. extension은 Phase 7+ (exit 1)*
+- [x] 사용자 Chrome을 디버그 포트로 켜는 가이드 — 2026-05-30. *`cdp_help()`가 macOS/Linux/Windows 명령 출력(별도 `--user-data-dir` 권장). `--capture cdp` 시 CLI가 출력. 테스트 6건(help/bridge 선택/CLI 전달)*
+- [ ] (잔여) 실제 Chrome CDP attach 스모크 — chromium + 디버그 포트 Chrome 필요. 수동 검증
 
 ## Phase 7+ — 브라우저 확장
 
@@ -151,6 +152,7 @@ sitree의 **작업 계획 + 진행 기록**. 각 작업을 끝낼 때마다 이 
 
 > 새 결정은 위에서부터 쌓기. 형식: `YYYY-MM-DD — 결정 — 이유`
 
+- 2026-05-30 — **CDP/런처 브리지가 `observe_page()` 공유.** 페이지 관찰(navigation+pushState 후킹+링크 수집)을 한 함수로 추출. Phase 5 결정대로 같은 인터페이스 위에 CDP 추가 — 코드 중복 0. CDP는 사용자 탭 강제 이동 안 함(평소 세션 보존)
 - 2026-05-30 — **`sitree report`는 단일 자립 HTML(데이터 인라인 + cytoscape CDN).** `view`(서버+SPA)와 달리 공유용. 도메인 통계는 `core/stats.py`로 분리해 report·대시보드가 공유 가능
 - 2026-05-30 — **라이브 모드: 캡처/세션/전송 분리.** `LiveSession`(순수, 테스트), `LiveHub`(WS fan-out), `PlaywrightLiveBridge`(브라우저). 같은 `VisitEvent` 스트림이라 Phase 6 CDP 브리지를 같은 인터페이스로 추가 가능. WS는 op 배치(JSON 배열) push, 프런트는 `applyLiveOps`로 fold
 - 2026-05-30 — **JS 렌더는 주입 가능한 `RenderFn` + 지연 Playwright.** `Labeler`와 같은 패턴 — 테스트는 fake로 브라우저 0회, 기본 `render_mode=never`라 Playwright 없이도 크롤 동작. auto는 휴리스틱 게이트, always는 전부 렌더

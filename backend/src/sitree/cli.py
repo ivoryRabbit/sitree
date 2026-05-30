@@ -139,15 +139,19 @@ def view(
 @app.command()
 def live(
     url: str = typer.Argument(..., help="Seed URL to start live exploration from."),
-    capture: str = typer.Option("playwright", help="Capture bridge: playwright | cdp | extension."),
+    capture: str = typer.Option("playwright", help="Capture bridge: playwright | cdp."),
     port: int = typer.Option(8765, help="Local port for dashboard + WebSocket."),
+    cdp_endpoint: str = typer.Option(
+        "http://localhost:9222", help="CDP endpoint for --capture cdp."
+    ),
     auto_expand: bool = typer.Option(False, help="Fetch links of visited pages in the background."),
     storage_state: Path | None = typer.Option(None, help="Playwright storage_state.json path."),
 ) -> None:
     """Start live exploration mode: open browser, watch the user's navigation, update graph in real time."""
-    if capture != "playwright":
+    if capture not in ("playwright", "cdp"):
         typer.secho(
-            f"[live] capture={capture!r} not yet implemented (Phase 6+); use 'playwright'.",
+            f"[live] capture={capture!r} not yet implemented (extension is Phase 7+); "
+            "use 'playwright' or 'cdp'.",
             fg=typer.colors.YELLOW,
             err=True,
         )
@@ -158,8 +162,17 @@ def live(
     from sitree.live.runner import run_live_sync
 
     dashboard = f"http://127.0.0.1:{port}/live"
-    typer.echo(f"[live] seed={url} → opening Chromium; dashboard at {dashboard} (close the window to stop)")
-    run_live_sync(url, port=port, storage_state=storage_state)
+    if capture == "cdp":
+        from sitree.live.cdp_bridge import cdp_help
+
+        typer.echo(cdp_help(cdp_endpoint))
+        typer.echo(f"[live] seed={url} → attaching over CDP; dashboard at {dashboard}")
+    else:
+        typer.echo(
+            f"[live] seed={url} → opening Chromium; dashboard at {dashboard} "
+            "(close the window to stop)"
+        )
+    run_live_sync(url, port=port, capture=capture, cdp_endpoint=cdp_endpoint, storage_state=storage_state)
 
 
 @app.command()

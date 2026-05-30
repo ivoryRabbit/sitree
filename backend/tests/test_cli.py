@@ -97,7 +97,7 @@ def test_auth_zone_only_runs_two_crawls(stub_run_crawl, tmp_path) -> None:
 
 
 def test_live_rejects_unknown_capture() -> None:
-    result = runner.invoke(app, ["live", "https://example.com", "--capture", "cdp"])
+    result = runner.invoke(app, ["live", "https://example.com", "--capture", "extension"])
     assert result.exit_code == 1
     assert "not yet implemented" in result.output
 
@@ -107,13 +107,31 @@ def test_live_invokes_runner_for_playwright(monkeypatch) -> None:
 
     captured: dict[str, object] = {}
 
-    def fake_run_live_sync(seed, *, port=8765, storage_state=None, **kw):
-        captured.update(seed=seed, port=port)
+    def fake_run_live_sync(seed, *, port=8765, capture="playwright", **kw):
+        captured.update(seed=seed, port=port, capture=capture)
 
     monkeypatch.setattr(runner_module, "run_live_sync", fake_run_live_sync)
     result = runner.invoke(app, ["live", "https://example.com", "--port", "9100"])
     assert result.exit_code == 0, result.output
-    assert captured == {"seed": "https://example.com", "port": 9100}
+    assert captured == {"seed": "https://example.com", "port": 9100, "capture": "playwright"}
+
+
+def test_live_cdp_passes_capture_and_prints_help(monkeypatch) -> None:
+    import sitree.live.runner as runner_module
+
+    captured: dict[str, object] = {}
+
+    def fake_run_live_sync(seed, *, port=8765, capture="playwright", cdp_endpoint=None, **kw):
+        captured.update(capture=capture, cdp_endpoint=cdp_endpoint)
+
+    monkeypatch.setattr(runner_module, "run_live_sync", fake_run_live_sync)
+    result = runner.invoke(
+        app, ["live", "https://example.com", "--capture", "cdp", "--cdp-endpoint", "http://localhost:9333"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured == {"capture": "cdp", "cdp_endpoint": "http://localhost:9333"}
+    # the guidance for starting Chrome is shown
+    assert "remote-debugging-port" in result.output
 
 
 def test_view_requires_existing_file(tmp_path) -> None:

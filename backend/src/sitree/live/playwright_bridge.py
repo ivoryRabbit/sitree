@@ -27,6 +27,43 @@ _PUSHSTATE_HOOK = """
 """
 
 
+async def observe_page(page: object, on_event: OnEvent) -> None:
+    """Wire a Playwright page so each navigation (incl. SPA pushState) emits a
+    VisitEvent. Shared by the launcher (Phase 5) and CDP attach (Phase 6).
+
+    Returns once the page closes or the browser disconnects.
+    """
+    last_url: dict[str, str | None] = {"value": None}
+
+    async def emit(url: str) -> None:
+        if not url or url == last_url["value"]:
+            return
+        referrer = last_url["value"]
+        last_url["value"] = url
+        links: list[str] = []
+        try:
+            links = await page.eval_on_selector_all("a[href]", "els => els.map((e) => e.href)")
+        except Exception:
+            pass
+        await on_event(VisitEvent(url=url, at=datetime.now(), referrer=referrer, links=links))
+
+    await page.expose_binding("__sitree_nav", lambda _source, url: asyncio.create_task(emit(url)))
+    await page.add_init_script(_PUSHSTATE_HOOK)
+    page.on(
+        "framenavigated",
+        lambda frame: asyncio.create_task(emit(frame.url)) if frame is page.main_frame else None,
+    )
+
+    closed = asyncio.Event()
+    page.on("close", lambda: closed.set())
+    page.context.browser.on("disconnected", lambda: closed.set())
+
+    # Capture the page that's already open (CDP attach to a running browser).
+    if page.url and page.url != "about:blank":
+        await emit(page.url)
+    return closed
+
+
 class PlaywrightLiveBridge:
     """Opens a Chromium window and streams VisitEvents to `on_event` until the
     user closes the window (or the browser disconnects)."""
@@ -45,20 +82,6 @@ class PlaywrightLiveBridge:
     async def run(self, seed_url: str, on_event: OnEvent) -> None:
         from playwright.async_api import async_playwright
 
-        last_url: dict[str, str | None] = {"value": None}
-
-        async def emit(url: str) -> None:
-            if not url or url == last_url["value"]:
-                return
-            referrer = last_url["value"]
-            last_url["value"] = url
-            links: list[str] = []
-            try:
-                links = await page.eval_on_selector_all("a[href]", "els => els.map((e) => e.href)")
-            except Exception:
-                pass
-            await on_event(VisitEvent(url=url, at=datetime.now(), referrer=referrer, links=links))
-
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=self._headless)
             ctx_kwargs: dict[str, object] = {}
@@ -67,20 +90,6 @@ class PlaywrightLiveBridge:
             context = await browser.new_context(**ctx_kwargs)
             page = await context.new_page()
 
-            await page.expose_binding(
-                "__sitree_nav", lambda _source, url: asyncio.create_task(emit(url))
-            )
-            await page.add_init_script(_PUSHSTATE_HOOK)
-            page.on(
-                "framenavigated",
-                lambda frame: asyncio.create_task(emit(frame.url))
-                if frame is page.main_frame
-                else None,
-            )
-
-            closed = asyncio.Event()
-            page.on("close", lambda: closed.set())
-            browser.on("disconnected", lambda: closed.set())
-
+            closed = await observe_page(page, on_event)
             await page.goto(seed_url, timeout=self._timeout_ms)
             await closed.wait()
