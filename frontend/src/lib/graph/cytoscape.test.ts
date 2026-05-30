@@ -56,16 +56,15 @@ describe('toElements', () => {
 		expect(byId['/b'].isCurrent).toBe(0);
 	});
 
-	it('maps edges with a stable id, count and first anchor', () => {
+	it('maps edges with a stable endpoint id, count and first anchor', () => {
 		const els = toElements(
 			graph(
 				[node('/'), node('/about')],
 				[{ source: '/', target: '/about', anchor_texts: ['About', 'About us'], count: 3, position: 'nav' }]
 			)
 		);
-		const edge = els.find((e) => e.data.id === 'e0');
-		expect(edge?.data.source).toBe('/');
-		expect(edge?.data.target).toBe('/about');
+		const edge = els.find((e) => e.data.source === '/' && e.data.target === '/about');
+		expect(edge?.data.id).toBe('/→/about');
 		expect(edge?.data.count).toBe(3);
 		expect(edge?.data.anchor).toBe('About');
 	});
@@ -74,7 +73,7 @@ describe('toElements', () => {
 		const els = toElements(
 			graph([node('/'), node('/x')], [{ source: '/', target: '/x', anchor_texts: [], count: 1, position: 'other' }])
 		);
-		expect(els.find((e) => e.data.id === 'e0')?.data.anchor).toBe('');
+		expect(els.find((e) => e.data.target === '/x')?.data.anchor).toBe('');
 	});
 });
 

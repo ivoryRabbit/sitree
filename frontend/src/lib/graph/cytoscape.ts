@@ -2,7 +2,7 @@
 // and applies a consistent style for sitree's node states + labels.
 
 import type { Core, ElementDefinition, StylesheetJson } from 'cytoscape';
-import type { SiteGraph, NodeState, PageType } from '../types';
+import type { SiteGraph, Node, Edge, NodeState, PageType } from '../types';
 
 export const LABEL_COLORS: Record<string, string> = {
 	Home: '#2563eb',
@@ -40,8 +40,8 @@ export function legend(graph: SiteGraph): LegendEntry[] {
 		.map((k) => ({ label: k, color: LABEL_COLORS[k], count: counts.get(k)! }));
 }
 
-export function toElements(graph: SiteGraph): ElementDefinition[] {
-	const nodes: ElementDefinition[] = graph.nodes.map((n) => ({
+export function toNodeElement(n: Node): ElementDefinition {
+	return {
 		data: {
 			id: n.template,
 			label: n.template,
@@ -53,19 +53,28 @@ export function toElements(graph: SiteGraph): ElementDefinition[] {
 			borderStyle: nodeBorderStyle(n.state),
 			isCurrent: n.state === 'current' ? 1 : 0
 		}
-	}));
+	};
+}
 
-	const edges: ElementDefinition[] = graph.edges.map((e, i) => ({
+/** Stable edge id from the endpoints, so live add_edge ops are idempotent. */
+export function edgeId(source: string, target: string): string {
+	return `${source}→${target}`;
+}
+
+export function toEdgeElement(e: Edge): ElementDefinition {
+	return {
 		data: {
-			id: `e${i}`,
+			id: edgeId(e.source, e.target),
 			source: e.source,
 			target: e.target,
 			count: e.count,
 			anchor: e.anchor_texts[0] ?? ''
 		}
-	}));
+	};
+}
 
-	return [...nodes, ...edges];
+export function toElements(graph: SiteGraph): ElementDefinition[] {
+	return [...graph.nodes.map(toNodeElement), ...graph.edges.map(toEdgeElement)];
 }
 
 export const stylesheet: StylesheetJson = [
